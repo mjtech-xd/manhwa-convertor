@@ -1,5 +1,5 @@
-import { Injectable } from '@angular/core';
-import type { Chapter, FilteredPage } from 'domain';
+import { Injectable, inject } from '@angular/core';
+import { ASSEMBLER_PORT, type Chapter, type FilteredPage } from 'domain';
 
 export interface AssembleOutputInput {
   readonly chapter: Chapter;
@@ -7,18 +7,16 @@ export interface AssembleOutputInput {
 }
 
 export interface AssembleOutputOutput {
+  readonly zipRef: string;
   readonly suggestedName: string;
-  // Bytes are assembled by an infrastructure adapter (in the worker) keyed on the chapter.
-  readonly artefactKey: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class AssembleOutputUseCase {
-  execute(input: AssembleOutputInput): AssembleOutputOutput {
-    const safe = input.chapter.title.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80) || 'chapter';
-    return {
-      suggestedName: `${safe}.zip`,
-      artefactKey: `artefact:${input.chapter.id}`,
-    };
+  private readonly assembler = inject(ASSEMBLER_PORT);
+
+  async execute(input: AssembleOutputInput): Promise<AssembleOutputOutput> {
+    const result = await this.assembler.buildChapterZip(input.chapter, input.keptPages);
+    return { zipRef: result.zipRef, suggestedName: result.suggestedName };
   }
 }

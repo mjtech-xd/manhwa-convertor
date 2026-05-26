@@ -8,7 +8,7 @@ import {
   type ProgressStage,
 } from 'ui-kit';
 import { BLOB_REGISTRY_PORT, type BlobRegistryPort, type FilteredPage } from 'domain';
-import { SingleModeStore, type StageStatus } from './single-mode.store';
+import { SingleModeStore, type SceneRow, type StageStatus } from './single-mode.store';
 
 function stageStatus(s: StageStatus): ProgressStage['status'] {
   return s === 'idle' ? 'pending' : s;
@@ -28,7 +28,7 @@ function stage(label: string, status: ProgressStage['status'], hint: string | un
       <header class="header">
         <div>
           <h2>Single mode</h2>
-          <p class="hint">Drop a chapter PDF. Pipeline runs extract → filter → bible.</p>
+          <p class="hint">Drop a chapter PDF. Pipeline runs extract → filter → bible → narrate → polish → structural → accuracy → assemble.</p>
         </div>
         @if (store.fileName(); as name) {
           <button
@@ -93,6 +93,99 @@ function stage(label: string, status: ProgressStage['status'], hint: string | un
           <ng-icon name="lucideTriangleAlert" size="0.9rem" />Bible failed: {{ e }}
         </p>
       }
+
+      @if (store.narrate.scenes().length > 0) {
+        <section>
+          <h3>Scenes ({{ doneSceneCount() }} narrated / {{ store.narrate.scenes().length }})</h3>
+          <ul class="m-0 flex list-none flex-col gap-2 p-0">
+            @for (s of store.narrate.scenes(); track s.id) {
+              <li class="rounded-lg border border-mc-border bg-mc-bg-elev p-3">
+                <div class="mb-2 flex items-center justify-between gap-2 text-sm">
+                  <span class="font-medium text-mc-text">{{ s.id }} — panels {{ s.panelIndices.join(', ') }}</span>
+                  <span [class]="sceneStatusClass(s.status)">{{ s.status }}</span>
+                </div>
+                @if (s.status === 'done') {
+                  <pre class="m-0 whitespace-pre-wrap font-sans text-sm leading-relaxed text-mc-text">{{ s.narration }}</pre>
+                } @else if (s.status === 'failed') {
+                  <p class="m-0 flex items-center gap-1.5 text-sm text-mc-danger">
+                    <ng-icon name="lucideTriangleAlert" size="0.9rem" />{{ s.error }}
+                  </p>
+                } @else if (s.status === 'running') {
+                  <p class="m-0 text-sm italic text-mc-text-muted">Narrating…</p>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
+      @if (store.narrate.error(); as e) {
+        <p class="m-0 flex items-center gap-1.5 text-sm text-mc-danger">
+          <ng-icon name="lucideTriangleAlert" size="0.9rem" />Narrate: {{ e }}
+        </p>
+      }
+
+      @if (finalScript(); as script) {
+        <section>
+          <h3>Final script ({{ finalScriptSource() }})</h3>
+          <pre class="m-0 max-h-[36rem] overflow-auto whitespace-pre-wrap rounded-lg border border-mc-border bg-mc-bg-elev p-3 font-sans text-sm leading-relaxed text-mc-text">{{ script }}</pre>
+        </section>
+      }
+
+      @if (store.polish.error(); as e) {
+        <p class="m-0 flex items-center gap-1.5 text-sm text-mc-danger">
+          <ng-icon name="lucideTriangleAlert" size="0.9rem" />Polish failed: {{ e }}
+        </p>
+      }
+      @if (store.structural.error(); as e) {
+        <p class="m-0 flex items-center gap-1.5 text-sm text-mc-danger">
+          <ng-icon name="lucideTriangleAlert" size="0.9rem" />Structural failed: {{ e }}
+        </p>
+      }
+
+      @if (store.assemble.zipRef(); as zipRef) {
+        <section>
+          <h3>Download</h3>
+          <a
+            class="inline-flex items-center gap-2 rounded bg-mc-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            [attr.href]="zipUrl()"
+            [attr.download]="store.assemble.suggestedName()"
+          >
+            <ng-icon name="lucideDownload" size="0.95rem" />
+            {{ store.assemble.suggestedName() }}
+          </a>
+        </section>
+      }
+
+      @if (store.assemble.error(); as e) {
+        <p class="m-0 flex items-center gap-1.5 text-sm text-mc-danger">
+          <ng-icon name="lucideTriangleAlert" size="0.9rem" />Assemble failed: {{ e }}
+        </p>
+      }
+
+      @if (store.accuracy.status() === 'done' || store.accuracy.status() === 'failed') {
+        <section>
+          <h3>Accuracy check
+            @if (store.accuracy.issues().length === 0 && store.accuracy.status() === 'done') {
+              — <span class="text-mc-text-muted">no issues</span>
+            } @else if (store.accuracy.issues().length > 0) {
+              ({{ store.accuracy.issues().length }} issue{{ store.accuracy.issues().length === 1 ? '' : 's' }})
+            }
+          </h3>
+          @if (store.accuracy.issues().length > 0) {
+            <ul class="m-0 flex list-disc flex-col gap-1 pl-5 text-sm text-mc-text">
+              @for (issue of store.accuracy.issues(); track issue) {
+                <li>{{ issue }}</li>
+              }
+            </ul>
+          }
+          @if (store.accuracy.error(); as e) {
+            <p class="m-0 mt-2 flex items-center gap-1.5 text-sm text-mc-danger">
+              <ng-icon name="lucideTriangleAlert" size="0.9rem" />Accuracy failed: {{ e }}
+            </p>
+          }
+        </section>
+      }
     </section>
   `,
   styles: [`
@@ -119,10 +212,30 @@ export class SingleModePage {
   private readonly blobs = inject(BLOB_REGISTRY_PORT) as BlobRegistryPort;
 
   protected readonly stages = computed<readonly ProgressStage[]>(() => [
-    stage('Extract', stageStatus(this.store.extract.status()), this.pagesHint(this.store.extract.pages().length)),
-    stage('Filter',  stageStatus(this.store.filter.status()),  this.keptHint()),
-    stage('Bible',   stageStatus(this.store.bible.status()),   this.bibleHint()),
+    stage('Extract',    stageStatus(this.store.extract.status()),    this.pagesHint(this.store.extract.pages().length)),
+    stage('Filter',     stageStatus(this.store.filter.status()),     this.keptHint()),
+    stage('Bible',      stageStatus(this.store.bible.status()),      this.bibleHint()),
+    stage('Narrate',    stageStatus(this.store.narrate.status()),    this.narrateHint()),
+    stage('Polish',     stageStatus(this.store.polish.status()),     undefined),
+    stage('Structural', stageStatus(this.store.structural.status()), undefined),
+    stage('Accuracy',   stageStatus(this.store.accuracy.status()),   this.accuracyHint()),
+    stage('Assemble',   stageStatus(this.store.assemble.status()),   undefined),
   ]);
+
+  protected readonly finalScript = computed<string | null>(() => {
+    return this.store.structural.value() ?? this.store.polish.value();
+  });
+
+  protected readonly finalScriptSource = computed<string>(() => {
+    if (this.store.structural.value()) return 'polish + structural';
+    if (this.store.polish.value()) return 'polish';
+    return '';
+  });
+
+  protected readonly zipUrl = computed<string | null>(() => {
+    const ref = this.store.assemble.zipRef();
+    return ref ? this.blobs.url(ref) : null;
+  });
 
   protected readonly extractedItems = computed<readonly ImageGridItem[]>(() =>
     this.store.extract.pages().map((p) => ({
@@ -142,6 +255,16 @@ export class SingleModePage {
   );
 
   protected readonly keptCount = computed(() => this.store.filter.pages().filter((p) => p.kept).length);
+  protected readonly doneSceneCount = computed(() => this.store.narrate.scenes().filter((s) => s.status === 'done').length);
+
+  protected sceneStatusClass(status: SceneRow['status']): string {
+    switch (status) {
+      case 'done':    return 'rounded px-2 py-0.5 text-xs bg-mc-bg text-mc-text-muted';
+      case 'running': return 'rounded px-2 py-0.5 text-xs bg-mc-accent text-white';
+      case 'failed':  return 'rounded px-2 py-0.5 text-xs bg-mc-danger text-white';
+      default:        return 'rounded px-2 py-0.5 text-xs bg-mc-bg text-mc-text-faint';
+    }
+  }
 
   onFiles(files: readonly File[]): void {
     const first = files[0];
@@ -160,5 +283,18 @@ export class SingleModePage {
   private bibleHint(): string | undefined {
     const b = this.store.bible.value();
     return b ? `${b.characters.length} characters` : undefined;
+  }
+  private narrateHint(): string | undefined {
+    const scenes = this.store.narrate.scenes();
+    if (!scenes.length) return undefined;
+    const done = scenes.filter((s) => s.status === 'done').length;
+    return `${done} / ${scenes.length} scenes`;
+  }
+  private accuracyHint(): string | undefined {
+    if (this.store.accuracy.status() === 'done') {
+      const n = this.store.accuracy.issues().length;
+      return n === 0 ? 'clean' : `${n} issue${n === 1 ? '' : 's'}`;
+    }
+    return undefined;
   }
 }

@@ -4,12 +4,14 @@
 import { type EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import {
+  ASSEMBLER_PORT,
   BLOB_REGISTRY_PORT,
   EVENT_BUS_PORT,
   GEMINI_PORT,
   IMAGE_FILTER_PORT,
   PDF_RASTERISER_PORT,
 } from 'domain';
+import { AssemblerAdapter } from './assembler/assembler.adapter';
 import { BlobRegistryService } from './blob-registry/blob-registry.service';
 import { EventBusService } from './event-bus/event-bus.service';
 import { GeminiAdapter } from './gemini/gemini.adapter';
@@ -25,5 +27,6 @@ export function provideInfrastructure(): EnvironmentProviders {
     { provide: PDF_RASTERISER_PORT, useExisting: PdfRasteriserAdapter },
     { provide: IMAGE_FILTER_PORT, useExisting: ImageFilterAdapter },
     { provide: GEMINI_PORT, useExisting: GeminiAdapter },
+    { provide: ASSEMBLER_PORT, useExisting: AssemblerAdapter },
   ]);
 }

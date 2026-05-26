@@ -35,8 +35,8 @@ export interface NarrateResult {
 export interface GeminiPort {
   narrate(req: NarrateRequest): Promise<NarrateResult>;
   buildBible(panelBytesRefs: readonly string[], tier: ModelTier): Promise<CharacterBible>;
-  polishScript(script: string, tier: ModelTier): Promise<string>;
-  structuralEdit(script: string, tier: ModelTier): Promise<string>;
+  polishScript(script: string, bible: CharacterBible, tier: ModelTier): Promise<string>;
+  structuralEdit(script: string, bible: CharacterBible, tier: ModelTier): Promise<string>;
   checkAccuracy(script: string, scenes: readonly Scene[], tier: ModelTier): Promise<{ issues: readonly string[] }>;
 }
 
@@ -125,6 +125,22 @@ export interface FilePort {
 }
 
 export const FILE_PORT = new InjectionToken<FilePort>('FilePort');
+
+// ─── Assembler ──────────────────────────────────────────────────────────
+
+export interface AssemblerPort {
+  /**
+   * Build a chapter ZIP (script.txt + script.srt + panel JPEGs +
+   * manifest.json) and stash it in the BlobRegistry. Returns the
+   * ref plus the suggested download filename.
+   */
+  buildChapterZip(
+    chapter: Chapter,
+    keptPages: readonly FilteredPage[],
+  ): Promise<{ readonly zipRef: string; readonly suggestedName: string }>;
+}
+
+export const ASSEMBLER_PORT = new InjectionToken<AssemblerPort>('AssemblerPort');
 
 // ─── Logging / events ───────────────────────────────────────────────────
 

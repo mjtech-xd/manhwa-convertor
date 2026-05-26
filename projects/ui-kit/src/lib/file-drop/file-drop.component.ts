@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 
 @Component({
   selector: 'mc-file-drop',
@@ -13,9 +13,9 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
       (dragleave)="onDragLeave($event)"
       (drop)="onDrop($event)"
     >
-      <input type="file" [attr.accept]="accept" multiple hidden (change)="onPick($event)" />
-      <strong>{{ label }}</strong>
-      <span class="hint">{{ hint }}</span>
+      <input type="file" [attr.accept]="accept()" multiple hidden (change)="onPick($event)" />
+      <strong>{{ label() }}</strong>
+      <span class="hint">{{ hint() }}</span>
     </label>
   `,
   styles: [`
@@ -41,9 +41,9 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
   `],
 })
 export class FileDropComponent {
-  accept = 'application/pdf';
-  label = 'Drop a PDF here or click to choose';
-  hint = 'Single chapter, up to 200 MB';
+  readonly accept = input<string>('application/pdf');
+  readonly label = input<string>('Drop a PDF here or click to choose');
+  readonly hint = input<string>('Single chapter, up to 200 MB');
 
   readonly filesPicked = output<readonly File[]>();
   protected readonly isDragging = signal(false);

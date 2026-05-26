@@ -12,3 +12,4 @@ export * from './lib/use-cases/structural-edit.use-case';
 export * from './lib/use-cases/check-accuracy.use-case';
 export * from './lib/use-cases/assemble-output.use-case';
 export * from './lib/use-cases/tts-render-track.use-case';
+export * from './lib/use-cases/run-chapter.use-case';

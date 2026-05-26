@@ -10,12 +10,14 @@ import { createCanvas } from '@napi-rs/canvas';
 import * as path from 'node:path';
 import type * as Pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
+// Wrap dynamic import in the Function constructor so tsc's CJS emit
+// can't downlevel it to require() — pdfjs-dist v5 is ESM-only.
+const dynamicImport = new Function('m', 'return import(m)') as <T>(m: string) => Promise<T>;
+
 let pdfjsPromise: Promise<typeof Pdfjs> | null = null;
 function loadPdfjs() {
-  // pdfjs-dist v5 is ESM-only; use dynamic import to bridge from our
-  // CJS Electron main bundle. Cache the module — subsequent calls reuse.
   if (!pdfjsPromise) {
-    pdfjsPromise = import('pdfjs-dist/legacy/build/pdf.mjs');
+    pdfjsPromise = dynamicImport<typeof Pdfjs>('pdfjs-dist/legacy/build/pdf.mjs');
   }
   return pdfjsPromise;
 }

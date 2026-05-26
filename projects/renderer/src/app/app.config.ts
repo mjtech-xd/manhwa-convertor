@@ -4,6 +4,7 @@ import { provideIcons } from '@ng-icons/core';
 import {
   lucideBug,
   lucideCheck,
+  lucideDownload,
   lucideEye,
   lucideEyeOff,
   lucideFileText,
@@ -27,6 +28,7 @@ import { routes } from './app.routes';
 const ICONS = {
   lucideBug,
   lucideCheck,
+  lucideDownload,
   lucideEye,
   lucideEyeOff,
   lucideFileText,
