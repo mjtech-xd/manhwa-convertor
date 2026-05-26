@@ -1,21 +1,175 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { NgIcon } from '@ng-icons/core';
+import { FileDropComponent } from 'ui-kit';
+import { BLOB_REGISTRY_PORT, type BlobRegistryPort } from 'domain';
+import {
+  BulkModeStore,
+  type BulkChapter,
+  type ChapterStatus,
+  type QueueStatus,
+} from './bulk-mode.store';
 
 @Component({
   selector: 'mc-bulk-mode-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [FileDropComponent, NgIcon],
   template: `
-    <section class="mode-page">
-      <h2>Bulk mode</h2>
-      <p class="hint">Queue 5–15 chapters with master-bible threading and checkpoint resume.</p>
-      <p class="todo">Implementation pending — phase 4 of the migration roadmap.</p>
+    <section class="mx-auto flex max-w-5xl flex-col gap-4 p-6">
+      <header class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="m-0 text-xl">Bulk mode</h2>
+          <p class="m-0 mt-1 text-sm text-mc-text-muted">
+            Queue chapter PDFs and run them through the pipeline sequentially. Each chapter produces its own ZIP.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          @if (store.status() === 'idle' || store.status() === 'done' || store.status() === 'failed' || store.status() === 'cancelled') {
+            <button
+              type="button"
+              [disabled]="store.chapters().length === 0"
+              (click)="store.start()"
+              class="flex items-center gap-1.5 rounded bg-mc-accent px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ng-icon name="lucideCheck" size="0.9rem" />
+              Start
+            </button>
+          }
+          @if (store.status() === 'running') {
+            <button
+              type="button"
+              (click)="store.cancel()"
+              [disabled]="store.cancelRequested()"
+              class="flex items-center gap-1.5 rounded border border-mc-border bg-transparent px-3 py-1.5 text-sm text-mc-text hover:bg-mc-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ng-icon name="lucideX" size="0.9rem" />
+              {{ store.cancelRequested() ? 'Cancelling…' : 'Cancel' }}
+            </button>
+          }
+          @if (store.chapters().length > 0 && store.status() !== 'running') {
+            <button
+              type="button"
+              (click)="store.reset()"
+              class="flex items-center gap-1.5 rounded border border-mc-border bg-transparent px-3 py-1.5 text-sm text-mc-text hover:bg-mc-bg-hover"
+            >
+              <ng-icon name="lucideRefreshCcw" size="0.9rem" />
+              Clear all
+            </button>
+          }
+        </div>
+      </header>
+
+      <mc-file-drop
+        label="Drop chapter PDFs (multiple)"
+        hint="Each PDF becomes a queue row. Pipeline runs them in order."
+        (filesPicked)="onFiles($event)"
+      />
+
+      @if (queueSummary(); as s) {
+        <p class="m-0 text-sm text-mc-text-muted">{{ s }}</p>
+      }
+
+      @if (store.chapters().length > 0) {
+        <section>
+          <h3 class="m-0 mb-2 text-base">Queue ({{ store.chapters().length }})</h3>
+          <ul class="m-0 flex list-none flex-col gap-2 p-0">
+            @for (ch of store.chapters(); track ch.id; let i = $index) {
+              <li class="rounded-lg border border-mc-border bg-mc-bg-elev p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex min-w-0 flex-1 items-center gap-3">
+                    <span class="font-mono text-xs text-mc-text-faint">#{{ i + 1 }}</span>
+                    <span class="truncate font-medium text-mc-text">{{ ch.name }}</span>
+                    @if (ch.usedMasterBible) {
+                      <span class="rounded bg-mc-bg px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-mc-text-faint" title="Used master bible from chapter 1">MB</span>
+                    }
+                    @if (ch.currentStage && ch.status === 'running') {
+                      <span class="text-xs text-mc-text-muted">{{ stageLabel(ch) }}</span>
+                    }
+                  </div>
+                  <div class="flex shrink-0 items-center gap-2">
+                    <span [class]="statusClass(ch.status)">{{ ch.status }}</span>
+                    @if (ch.zipRef && ch.suggestedName) {
+                      <a
+                        class="flex items-center gap-1 rounded border border-mc-border px-2 py-1 text-xs text-mc-text hover:bg-mc-bg-hover"
+                        [attr.href]="zipUrl(ch.zipRef)"
+                        [attr.download]="ch.suggestedName"
+                      >
+                        <ng-icon name="lucideDownload" size="0.8rem" />
+                        ZIP
+                      </a>
+                    }
+                    @if (ch.status === 'pending' || ch.status === 'failed' || ch.status === 'cancelled' || ch.status === 'done') {
+                      <button
+                        type="button"
+                        (click)="store.remove(ch.id)"
+                        [disabled]="store.status() === 'running'"
+                        class="rounded border border-mc-border px-2 py-1 text-xs text-mc-text-muted hover:border-mc-danger hover:text-mc-danger disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label="Remove"
+                      >
+                        <ng-icon name="lucideX" size="0.8rem" />
+                      </button>
+                    }
+                  </div>
+                </div>
+                @if (ch.error) {
+                  <p class="m-0 mt-2 flex items-center gap-1.5 text-xs text-mc-danger">
+                    <ng-icon name="lucideTriangleAlert" size="0.8rem" />{{ ch.error }}
+                  </p>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
     </section>
   `,
-  styles: [`
-    .mode-page { padding: 2rem; display: flex; flex-direction: column; gap: 0.75rem; }
-    h2 { margin: 0; font-size: 1.5rem; }
-    .hint { color: var(--mc-text-muted); margin: 0; }
-    .todo { color: var(--mc-text-faint); font-style: italic; margin: 0; }
-  `],
 })
-export class BulkModePage {}
+export class BulkModePage {
+  protected readonly store = inject(BulkModeStore);
+  private readonly blobs = inject(BLOB_REGISTRY_PORT) as BlobRegistryPort;
+
+  protected readonly queueSummary = computed<string | null>(() => {
+    const chapters = this.store.chapters();
+    if (chapters.length === 0) return null;
+    const done = chapters.filter((c) => c.status === 'done').length;
+    const failed = chapters.filter((c) => c.status === 'failed').length;
+    const cancelled = chapters.filter((c) => c.status === 'cancelled').length;
+    const running = chapters.filter((c) => c.status === 'running').length;
+    const status = this.store.status();
+    const parts = [
+      `${chapters.length} chapter${chapters.length === 1 ? '' : 's'}`,
+      done > 0 ? `${done} done` : null,
+      failed > 0 ? `${failed} failed` : null,
+      cancelled > 0 ? `${cancelled} cancelled` : null,
+      running > 0 ? '1 running' : null,
+    ].filter((p): p is string => p !== null);
+    const prefix = status === 'running' ? 'Running — ' : status === 'idle' ? '' : `${status} — `;
+    return `${prefix}${parts.join(' · ')}`;
+  });
+
+  onFiles(files: readonly File[]): void {
+    this.store.add(files);
+  }
+
+  zipUrl(ref: string): string | null {
+    return this.blobs.url(ref);
+  }
+
+  stageLabel(ch: BulkChapter): string {
+    if (!ch.currentStage) return '';
+    if (ch.currentStage === 'narrate' && ch.sceneCount && ch.scenesDone !== null) {
+      return `narrate ${ch.scenesDone}/${ch.sceneCount}`;
+    }
+    return ch.currentStage;
+  }
+
+  statusClass(status: ChapterStatus | QueueStatus): string {
+    switch (status) {
+      case 'done':      return 'rounded px-2 py-0.5 text-xs bg-mc-bg text-mc-text-muted';
+      case 'running':   return 'rounded px-2 py-0.5 text-xs bg-mc-accent text-white';
+      case 'failed':    return 'rounded px-2 py-0.5 text-xs bg-mc-danger text-white';
+      case 'cancelled': return 'rounded px-2 py-0.5 text-xs bg-mc-border text-mc-text-muted';
+      default:          return 'rounded px-2 py-0.5 text-xs bg-mc-bg text-mc-text-faint';
+    }
+  }
+}
