@@ -1,0 +1,105 @@
+{
+  "name": "manhwa-convertor",
+  "productName": "Manhwa Convertor",
+  "version": "0.1.0",
+  "description": "Desktop app that converts manhwa chapter PDFs into YouTube-ready recap script + voiceover + SRT. Angular + Electron rewrite of manhwa-pipeline.",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main/index.js",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "build:libs": "ng build domain && ng build shared-ipc && ng build application && ng build infrastructure && ng build ui-kit && ng build feature-settings && ng build feature-debug && ng build feature-single-mode && ng build feature-bulk-mode && ng build feature-tts-mode",
+    "build:all": "npm run build:libs && ng build renderer",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "lint": "eslint \"projects/**/*.{ts,html}\" \"electron/**/*.ts\"",
+    "format": "prettier --write \"projects/**/*.{ts,html,scss}\" \"electron/**/*.ts\"",
+    "format:check": "prettier --check \"projects/**/*.{ts,html,scss}\" \"electron/**/*.ts\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "electron:build": "tsc -p electron/tsconfig.json",
+    "electron:dev": "concurrently -k -n NG,ELECTRON -c blue,magenta \"ng serve\" \"wait-on http://localhost:4200 && npm run electron:build && cross-env NODE_ENV=development electron dist-electron/main/index.js\"",
+    "dist": "npm run build:all && npm run electron:build && electron-builder",
+    "dist:win": "npm run build:all && npm run electron:build && electron-builder --win",
+    "dist:mac": "npm run build:all && npm run electron:build && electron-builder --mac"
+  },
+  "packageManager": "npm@11.11.1",
+  "dependencies": {
+    "@angular/cdk": "^21.2.0",
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "@ngrx/signals": "^21.1.0",
+    "@napi-rs/canvas": "^0.1.65",
+    "@ng-icons/core": "^32.0.0",
+    "@ng-icons/lucide": "^32.0.0",
+    "jszip": "^3.10.1",
+    "pdfjs-dist": "^5.7.284",
+    "sharp": "^0.33.5",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.12",
+    "@angular/cli": "^21.2.2",
+    "@angular/compiler-cli": "^21.2.0",
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "angular-eslint": "^21.0.0",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.16.0",
+    "eslint-plugin-boundaries": "^5.0.1",
+    "jsdom": "^28.0.0",
+    "ng-packagr": "^21.2.0",
+    "postcss": "^8.4.49",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^3.4.15",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.manhwa.convertor",
+    "productName": "Manhwa Convertor",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/renderer/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
+  }
+}

@@ -1,0 +1,110 @@
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "paths": {
+      "application": ["./dist/application"],
+      "domain": ["./dist/domain"],
+      "feature-bulk-mode": ["./dist/feature-bulk-mode"],
+      "feature-debug": ["./dist/feature-debug"],
+      "feature-settings": ["./dist/feature-settings"],
+      "feature-single-mode": ["./dist/feature-single-mode"],
+      "feature-tts-mode": ["./dist/feature-tts-mode"],
+      "infrastructure": ["./dist/infrastructure"],
+      "shared-ipc": ["./dist/shared-ipc"],
+      "ui-kit": ["./dist/ui-kit"]
+    },
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "preserve"
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./projects/renderer/tsconfig.app.json"
+    },
+    {
+      "path": "./projects/renderer/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/domain/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/domain/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/application/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/application/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/infrastructure/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/infrastructure/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/shared-ipc/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/shared-ipc/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/ui-kit/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/ui-kit/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/feature-single-mode/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/feature-single-mode/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/feature-bulk-mode/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/feature-bulk-mode/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/feature-tts-mode/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/feature-tts-mode/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/feature-settings/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/feature-settings/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/feature-debug/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/feature-debug/tsconfig.spec.json"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">MC</span>
+    <span class="brand-name">Manhwa Convertor</span>
+  </div>
+  <nav class="tabs" aria-label="Primary">
+    @for (item of nav; track item.path) {
+      <a [routerLink]="item.path" routerLinkActive="is-active" class="tab">
+        <ng-icon [name]="item.icon" size="0.9rem" />
+        <span>{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+</header>
+
+<main class="main">
+  <router-outlet />
+</main>
