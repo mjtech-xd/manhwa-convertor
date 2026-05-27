@@ -10,7 +10,7 @@
 
 import { ipcMain } from 'electron';
 import { z } from 'zod';
-import { rasterisePdf } from '../services/pdf-rasteriser.service';
+import { rasterisePdf } from '../services/pdf-rasteriser.service.js';
 
 const RequestSchema = z.object({
   pdfBytes: z.instanceof(Uint8Array),

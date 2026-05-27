@@ -16,6 +16,7 @@ const C = {
   ImageFilter: 'image:filter',
   AudioStitch: 'audio:stitch',
   CheckpointSaveMeta: 'checkpoint:save-meta',
+  CheckpointLoadMeta: 'checkpoint:load-meta',
   CheckpointWriteChapter: 'checkpoint:write-chapter',
   CheckpointListSessions: 'checkpoint:list-sessions',
   CheckpointDeleteSession: 'checkpoint:delete-session',
@@ -52,6 +53,7 @@ const bridge = Object.freeze({
   }),
   checkpoint: Object.freeze({
     saveMeta: (req: unknown) => ipcRenderer.invoke(C.CheckpointSaveMeta, req),
+    loadMeta: (req: unknown) => ipcRenderer.invoke(C.CheckpointLoadMeta, req),
     writeChapter: (req: unknown) => ipcRenderer.invoke(C.CheckpointWriteChapter, req),
     listSessions: () => ipcRenderer.invoke(C.CheckpointListSessions),
     deleteSession: (sessionId: string) => ipcRenderer.invoke(C.CheckpointDeleteSession, sessionId),

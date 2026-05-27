@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { NgIcon } from '@ng-icons/core';
 import { FileDropComponent } from 'ui-kit';
 import { BLOB_REGISTRY_PORT, type BlobRegistryPort } from 'domain';
+import type { CheckpointSessionMeta } from 'domain';
 import {
   BulkModeStore,
   type BulkChapter,
@@ -58,6 +59,27 @@ import {
           }
         </div>
       </header>
+
+      @if (store.recoverable(); as rec) {
+        <div class="flex items-start justify-between gap-3 rounded-lg border border-mc-border bg-mc-bg-elev p-3">
+          <div class="flex items-start gap-2">
+            <ng-icon name="lucideTriangleAlert" size="1rem" class="mt-0.5 text-mc-text-muted" />
+            <div>
+              <p class="m-0 text-sm font-medium text-mc-text">A previous bulk run was interrupted.</p>
+              <p class="m-0 mt-0.5 text-xs text-mc-text-muted">
+                {{ recoveredDoneCount(rec) }} of {{ rec.chapters.length }} chapters finished before it stopped (scripts saved to disk{{ rec.masterBible ? ', master bible recovered' : '' }}). Re-add the remaining PDFs to continue — finished chapters keep the same bible.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            (click)="store.discardRecovery()"
+            class="shrink-0 rounded border border-mc-border px-2.5 py-1 text-xs text-mc-text-muted hover:border-mc-danger hover:text-mc-danger"
+          >
+            Discard
+          </button>
+        </div>
+      }
 
       <mc-file-drop
         label="Drop chapter PDFs (multiple)"
@@ -127,6 +149,15 @@ import {
 export class BulkModePage {
   protected readonly store = inject(BulkModeStore);
   private readonly blobs = inject(BLOB_REGISTRY_PORT) as BlobRegistryPort;
+
+  constructor() {
+    // Surface any interrupted run found on disk (no-op outside Electron).
+    void this.store.checkForInterruptedSession();
+  }
+
+  recoveredDoneCount(rec: CheckpointSessionMeta): number {
+    return rec.chapters.filter((c) => c.status === 'done').length;
+  }
 
   protected readonly queueSummary = computed<string | null>(() => {
     const chapters = this.store.chapters();

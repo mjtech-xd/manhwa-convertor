@@ -7,7 +7,7 @@
 
 import { app, BrowserWindow, session, shell } from 'electron';
 import * as path from 'node:path';
-import { registerIpcHandlers } from './ipc';
+import { registerIpcHandlers } from './ipc/index.js';
 
 const isDev = process.env['NODE_ENV'] === 'development';
 const RENDERER_DEV_URL = 'http://localhost:4200';

@@ -8,8 +8,11 @@ import { inject } from '@angular/core';
 import { signalStore, withMethods, withState, patchState } from '@ngrx/signals';
 import {
   BLOB_REGISTRY_PORT,
+  CHECKPOINT_PORT,
   type BlobRegistryPort,
   type CharacterBible,
+  type CheckpointPort,
+  type CheckpointSessionMeta,
 } from 'domain';
 import { RunChapterUseCase, type RunChapterStageEvent } from 'application';
 
@@ -42,6 +45,11 @@ export interface BulkModeState {
   readonly cancelRequested: boolean;
   /** Captured from the first successful bible call; reused by subsequent chapters. */
   readonly masterBible: CharacterBible | null;
+  /** Disk-checkpoint session id for the active run (null when idle). */
+  readonly sessionId: string | null;
+  readonly sessionCreatedAt: string | null;
+  /** An interrupted run found on disk at launch — surfaced for recovery. */
+  readonly recoverable: CheckpointSessionMeta | null;
 }
 
 const initial: BulkModeState = {
@@ -50,6 +58,9 @@ const initial: BulkModeState = {
   currentIndex: null,
   cancelRequested: false,
   masterBible: null,
+  sessionId: null,
+  sessionCreatedAt: null,
+  recoverable: null,
 };
 
 export const BulkModeStore = signalStore(
@@ -58,6 +69,7 @@ export const BulkModeStore = signalStore(
   withMethods((store) => {
     const blobs = inject(BLOB_REGISTRY_PORT) as BlobRegistryPort;
     const runChapter = inject(RunChapterUseCase);
+    const checkpoint: CheckpointPort = inject(CHECKPOINT_PORT);
 
     const patchChapterAt = (i: number, updates: Partial<BulkChapter>): void => {
       patchState(store, (state) => {
@@ -66,6 +78,30 @@ export const BulkModeStore = signalStore(
         );
         return { chapters: next };
       });
+    };
+
+    /** Persist a snapshot of the queue to disk. Best-effort — a failed
+     *  checkpoint write never aborts the run. No-ops outside Electron. */
+    const saveMeta = async (status: CheckpointSessionMeta['status']): Promise<void> => {
+      const sessionId = store.sessionId();
+      if (!sessionId || !checkpoint.isAvailable()) return;
+      try {
+        await checkpoint.saveMeta({
+          sessionId,
+          createdAt: store.sessionCreatedAt() ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status,
+          masterBible: store.masterBible(),
+          chapters: store.chapters().map((c) => ({
+            id: c.id,
+            name: c.name,
+            status: c.status,
+            hasScript: c.status === 'done',
+          })),
+        });
+      } catch {
+        // Disk hiccup — keep running; recovery just won't reflect this tick.
+      }
     };
 
     /** Build an onStage handler scoped to a single queue row. */
@@ -173,15 +209,52 @@ export const BulkModeStore = signalStore(
         patchState(store, { cancelRequested: true });
       },
 
+      async checkForInterruptedSession(): Promise<void> {
+        if (!checkpoint.isAvailable()) return;
+        if (store.status() === 'running' || store.recoverable()) return;
+        let ids: readonly string[];
+        try {
+          ids = await checkpoint.listSessions();
+        } catch {
+          return;
+        }
+        // Most-recent-first: session ids are timestamp-prefixed.
+        for (const id of [...ids].sort().reverse()) {
+          const meta = await checkpoint.loadMeta(id);
+          if (meta && meta.status === 'running') {
+            patchState(store, { recoverable: meta });
+            return;
+          }
+        }
+      },
+
+      async discardRecovery(): Promise<void> {
+        const rec = store.recoverable();
+        if (rec) {
+          try {
+            await checkpoint.deleteSession(rec.sessionId);
+          } catch {
+            // Best-effort — clear the banner regardless.
+          }
+        }
+        patchState(store, { recoverable: null });
+      },
+
       async start(): Promise<void> {
         if (store.status() === 'running') return;
         if (store.chapters().length === 0) return;
 
+        // Fresh checkpoint session for this run.
+        const sessionId = `bulk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
         patchState(store, {
           status: 'running',
           currentIndex: null,
           cancelRequested: false,
+          sessionId,
+          sessionCreatedAt: new Date().toISOString(),
+          recoverable: null,
         });
+        await saveMeta('running');
 
         for (let i = 0; i < store.chapters().length; i++) {
           if (store.cancelRequested()) break;
@@ -189,6 +262,7 @@ export const BulkModeStore = signalStore(
           if (ch.status !== 'pending') continue;   // skip already-finished rows on re-start
           patchState(store, { currentIndex: i });
           patchChapterAt(i, { status: 'running', error: null });
+          await saveMeta('running');
 
           const bibleOverride = store.masterBible() ?? undefined;
           const result = await runChapter.execute({
@@ -211,6 +285,19 @@ export const BulkModeStore = signalStore(
                 zipRef: result.zipRef,
                 suggestedName: result.suggestedName,
               });
+              // Persist the chapter's recoverable text payload.
+              if (result.chapter) {
+                try {
+                  await checkpoint.writeChapter(sessionId, i, {
+                    index: i,
+                    name: ch.name,
+                    script: result.chapter.script,
+                    bible: result.chapter.bible,
+                  });
+                } catch {
+                  // Non-fatal — meta still records the chapter as done.
+                }
+              }
               break;
             case 'failed':
               patchChapterAt(i, {
@@ -226,6 +313,7 @@ export const BulkModeStore = signalStore(
               });
               break;
           }
+          await saveMeta('running');
         }
 
         const cancelled = store.cancelRequested();
@@ -236,6 +324,7 @@ export const BulkModeStore = signalStore(
             ? 'failed'
             : 'done';
         patchState(store, { status: overall, currentIndex: null, cancelRequested: false });
+        await saveMeta(overall);
       },
     };
   }),

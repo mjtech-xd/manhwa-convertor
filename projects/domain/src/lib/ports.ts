@@ -142,6 +142,46 @@ export interface AssemblerPort {
 
 export const ASSEMBLER_PORT = new InjectionToken<AssemblerPort>('AssemblerPort');
 
+// ─── Checkpoint (disk-backed bulk-run recovery) ─────────────────────────
+
+export interface CheckpointChapterMeta {
+  readonly id: string;
+  readonly name: string;
+  readonly status: string;
+  readonly hasScript: boolean;
+}
+
+export interface CheckpointSessionMeta {
+  readonly sessionId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  /** 'running' while a run is in flight — a persisted 'running' on next
+   *  launch means the run was interrupted (hard kill). */
+  readonly status: 'running' | 'done' | 'failed' | 'cancelled';
+  readonly masterBible: CharacterBible | null;
+  readonly chapters: readonly CheckpointChapterMeta[];
+}
+
+/** One completed chapter's recoverable text payload (no image bytes). */
+export interface CheckpointChapterScript {
+  readonly index: number;
+  readonly name: string;
+  readonly script: string;
+  readonly bible: CharacterBible;
+}
+
+export interface CheckpointPort {
+  /** False in the browser dev build (no Electron bridge) — callers no-op. */
+  isAvailable(): boolean;
+  saveMeta(meta: CheckpointSessionMeta): Promise<void>;
+  loadMeta(sessionId: string): Promise<CheckpointSessionMeta | null>;
+  writeChapter(sessionId: string, index: number, script: CheckpointChapterScript): Promise<void>;
+  listSessions(): Promise<readonly string[]>;
+  deleteSession(sessionId: string): Promise<void>;
+}
+
+export const CHECKPOINT_PORT = new InjectionToken<CheckpointPort>('CheckpointPort');
+
 // ─── Logging / events ───────────────────────────────────────────────────
 
 export interface StageEvent {

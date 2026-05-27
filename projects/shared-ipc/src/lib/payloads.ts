@@ -98,6 +98,11 @@ export const CheckpointSaveMetaRequestSchema = z.object({
 });
 export type CheckpointSaveMetaRequest = z.infer<typeof CheckpointSaveMetaRequestSchema>;
 
+export const CheckpointLoadMetaRequestSchema = z.object({
+  sessionId: SessionIdSchema,
+});
+export type CheckpointLoadMetaRequest = z.infer<typeof CheckpointLoadMetaRequestSchema>;
+
 export const CheckpointWriteChapterRequestSchema = z.object({
   sessionId: SessionIdSchema,
   chapterIndex: z.number().int().nonnegative(),

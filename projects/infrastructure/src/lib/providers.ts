@@ -6,6 +6,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import {
   ASSEMBLER_PORT,
   BLOB_REGISTRY_PORT,
+  CHECKPOINT_PORT,
   EVENT_BUS_PORT,
   GEMINI_PORT,
   IMAGE_FILTER_PORT,
@@ -13,6 +14,7 @@ import {
 } from 'domain';
 import { AssemblerAdapter } from './assembler/assembler.adapter';
 import { BlobRegistryService } from './blob-registry/blob-registry.service';
+import { CheckpointAdapter } from './ipc/checkpoint.adapter';
 import { EventBusService } from './event-bus/event-bus.service';
 import { GeminiAdapter } from './gemini/gemini.adapter';
 import { errorMappingInterceptor } from './interceptors/error-mapping.interceptor';
@@ -28,5 +30,6 @@ export function provideInfrastructure(): EnvironmentProviders {
     { provide: IMAGE_FILTER_PORT, useExisting: ImageFilterAdapter },
     { provide: GEMINI_PORT, useExisting: GeminiAdapter },
     { provide: ASSEMBLER_PORT, useExisting: AssemblerAdapter },
+    { provide: CHECKPOINT_PORT, useExisting: CheckpointAdapter },
   ]);
 }

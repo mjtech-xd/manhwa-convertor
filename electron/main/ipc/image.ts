@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { z } from 'zod';
-import { filterPages } from '../services/image-filter.service';
+import { filterPages } from '../services/image-filter.service.js';
 
 const SettingsSchema = z.object({
   cropTopPct: z.number().min(0).max(0.4),
