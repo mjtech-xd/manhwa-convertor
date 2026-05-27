@@ -21,6 +21,10 @@ const SaveMetaSchema = z.object({
   meta: z.record(z.unknown()),
 });
 const LoadMetaSchema = z.object({ sessionId: SESSION_ID });
+const ReadChapterSchema = z.object({
+  sessionId: SESSION_ID,
+  chapterIndex: z.number().int().nonnegative(),
+});
 const WriteChapterSchema = z.object({
   sessionId: SESSION_ID,
   chapterIndex: z.number().int().nonnegative(),
@@ -70,6 +74,17 @@ export function registerCheckpointHandlers(): void {
     const { sessionId, chapterIndex, scriptJson } = WriteChapterSchema.parse(raw);
     const name = `chapter-${String(chapterIndex).padStart(3, '0')}.json`;
     await writeAtomic(path.join(sessionDir(sessionId), name), JSON.stringify(scriptJson));
+  });
+
+  ipcMain.handle('checkpoint:read-chapter', async (_e, raw: unknown) => {
+    const { sessionId, chapterIndex } = ReadChapterSchema.parse(raw);
+    const name = `chapter-${String(chapterIndex).padStart(3, '0')}.json`;
+    try {
+      const text = await fs.readFile(path.join(sessionDir(sessionId), name), 'utf8');
+      return JSON.parse(text) as unknown;
+    } catch {
+      return null;
+    }
   });
 
   ipcMain.handle('checkpoint:list-sessions', async () => {

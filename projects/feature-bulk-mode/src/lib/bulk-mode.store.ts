@@ -23,7 +23,8 @@ export type QueueStatus = 'idle' | 'running' | 'done' | 'failed' | 'cancelled';
 
 export interface BulkChapter {
   readonly id: string;
-  readonly file: File;
+  /** Null for a recovered row whose PDF hasn't been re-added after a resume. */
+  readonly file: File | null;
   readonly name: string;
   readonly status: ChapterStatus;
   readonly currentStage: ChapterStage | null;
@@ -36,6 +37,12 @@ export interface BulkChapter {
   readonly error: string | null;
   /** True when this chapter ran with the master bible from chapter 1. */
   readonly usedMasterBible: boolean;
+  /** Recovered from disk on resume (no live File/ZIP — script text only). */
+  readonly recovered: boolean;
+  /** A resumed row still waiting for its PDF to be re-added (matched by name). */
+  readonly awaitingFile: boolean;
+  /** BlobRegistry ref to the recovered script.txt, downloadable after resume. */
+  readonly recoveredScriptRef: string | null;
 }
 
 export interface BulkModeState {
@@ -162,28 +169,29 @@ export const BulkModeStore = signalStore(
 
     const revokeChapter = (ch: BulkChapter): void => {
       if (ch.zipRef) blobs.revoke(ch.zipRef);
+      if (ch.recoveredScriptRef) blobs.revoke(ch.recoveredScriptRef);
     };
 
     return {
       add(files: readonly File[]): void {
         const pdfFiles = files.filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
         if (pdfFiles.length === 0) return;
-        const rows: BulkChapter[] = pdfFiles.map((f) => ({
-          id: crypto.randomUUID(),
-          file: f,
-          name: f.name,
-          status: 'pending',
-          currentStage: null,
-          panelsKept: null,
-          sceneCount: null,
-          scenesDone: null,
-          issueCount: null,
-          zipRef: null,
-          suggestedName: null,
-          error: null,
-          usedMasterBible: false,
-        }));
-        patchState(store, (state) => ({ chapters: [...state.chapters, ...rows] }));
+        patchState(store, (state) => {
+          const chapters = [...state.chapters];
+          for (const f of pdfFiles) {
+            // After a resume, fill the first awaiting row whose name
+            // matches; otherwise append a new queue row.
+            const idx = chapters.findIndex(
+              (c) => c.awaitingFile && !c.file && c.name.toLowerCase() === f.name.toLowerCase(),
+            );
+            if (idx >= 0) {
+              chapters[idx] = { ...chapters[idx]!, file: f, awaitingFile: false };
+            } else {
+              chapters.push(freshRow(f));
+            }
+          }
+          return { chapters };
+        });
       },
 
       remove(id: string): void {
@@ -228,6 +236,48 @@ export const BulkModeStore = signalStore(
         }
       },
 
+      async resumeRecovery(): Promise<void> {
+        const rec = store.recoverable();
+        if (!rec) return;
+
+        const rows: BulkChapter[] = [];
+        for (let i = 0; i < rec.chapters.length; i++) {
+          const c = rec.chapters[i]!;
+          if (c.status === 'done') {
+            let scriptRef: string | null = null;
+            if (c.hasScript) {
+              try {
+                const saved = await checkpoint.readChapter(rec.sessionId, i);
+                if (saved?.script) {
+                  scriptRef = blobs.put(new TextEncoder().encode(saved.script), 'text/plain');
+                }
+              } catch {
+                // Recovered row simply won't carry a script download.
+              }
+            }
+            rows.push({
+              ...freshRow(null, c.name, c.id),
+              status: 'done',
+              recovered: true,
+              recoveredScriptRef: scriptRef,
+            });
+          } else {
+            rows.push({ ...freshRow(null, c.name, c.id), status: 'pending', awaitingFile: true });
+          }
+        }
+
+        patchState(store, {
+          chapters: rows,
+          status: 'idle',
+          currentIndex: null,
+          cancelRequested: false,
+          masterBible: rec.masterBible,
+          sessionId: rec.sessionId,
+          sessionCreatedAt: rec.createdAt,
+          recoverable: null,
+        });
+      },
+
       async discardRecovery(): Promise<void> {
         const rec = store.recoverable();
         if (rec) {
@@ -244,14 +294,19 @@ export const BulkModeStore = signalStore(
         if (store.status() === 'running') return;
         if (store.chapters().length === 0) return;
 
-        // Fresh checkpoint session for this run.
-        const sessionId = `bulk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        // Reuse the adopted session when resuming an interrupted run
+        // (recovered rows present); otherwise start a fresh session.
+        const resuming = store.chapters().some((c) => c.recovered);
+        const sessionId =
+          resuming && store.sessionId()
+            ? store.sessionId()!
+            : `bulk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
         patchState(store, {
           status: 'running',
           currentIndex: null,
           cancelRequested: false,
           sessionId,
-          sessionCreatedAt: new Date().toISOString(),
+          sessionCreatedAt: store.sessionCreatedAt() ?? new Date().toISOString(),
           recoverable: null,
         });
         await saveMeta('running');
@@ -259,7 +314,8 @@ export const BulkModeStore = signalStore(
         for (let i = 0; i < store.chapters().length; i++) {
           if (store.cancelRequested()) break;
           const ch = store.chapters()[i]!;
-          if (ch.status !== 'pending') continue;   // skip already-finished rows on re-start
+          // Skip finished rows and any awaiting row whose PDF wasn't re-added.
+          if (ch.status !== 'pending' || !ch.file) continue;
           patchState(store, { currentIndex: i });
           patchChapterAt(i, { status: 'running', error: null });
           await saveMeta('running');
@@ -329,3 +385,24 @@ export const BulkModeStore = signalStore(
     };
   }),
 );
+
+function freshRow(file: File | null, name?: string, id?: string): BulkChapter {
+  return {
+    id: id ?? crypto.randomUUID(),
+    file,
+    name: name ?? file?.name ?? 'chapter',
+    status: 'pending',
+    currentStage: null,
+    panelsKept: null,
+    sceneCount: null,
+    scenesDone: null,
+    issueCount: null,
+    zipRef: null,
+    suggestedName: null,
+    error: null,
+    usedMasterBible: false,
+    recovered: false,
+    awaitingFile: false,
+    recoveredScriptRef: null,
+  };
+}

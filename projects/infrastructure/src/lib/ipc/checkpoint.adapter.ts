@@ -49,6 +49,13 @@ export class CheckpointAdapter implements CheckpointPort {
     });
   }
 
+  async readChapter(sessionId: string, index: number): Promise<CheckpointChapterScript | null> {
+    const b = getBridge();
+    if (!b) return null;
+    const raw = await b.checkpoint.readChapter({ sessionId, chapterIndex: index });
+    return (raw as CheckpointChapterScript | null) ?? null;
+  }
+
   async listSessions(): Promise<readonly string[]> {
     const b = getBridge();
     if (!b) return [];

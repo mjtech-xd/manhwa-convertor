@@ -7,6 +7,7 @@ import type {
   AudioStitchRequest,
   AudioStitchResponse,
   CheckpointLoadMetaRequest,
+  CheckpointReadChapterRequest,
   CheckpointSaveMetaRequest,
   CheckpointWriteChapterRequest,
   DialogPickPdfsResponse,
@@ -40,6 +41,7 @@ export interface ManhwaConvertorBridge {
     saveMeta(req: CheckpointSaveMetaRequest): Promise<void>;
     loadMeta(req: CheckpointLoadMetaRequest): Promise<unknown | null>;
     writeChapter(req: CheckpointWriteChapterRequest): Promise<void>;
+    readChapter(req: CheckpointReadChapterRequest): Promise<unknown | null>;
     listSessions(): Promise<readonly string[]>;
     deleteSession(sessionId: string): Promise<void>;
   };

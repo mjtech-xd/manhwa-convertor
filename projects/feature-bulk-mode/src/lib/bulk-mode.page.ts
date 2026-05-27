@@ -71,13 +71,22 @@ import {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            (click)="store.discardRecovery()"
-            class="shrink-0 rounded border border-mc-border px-2.5 py-1 text-xs text-mc-text-muted hover:border-mc-danger hover:text-mc-danger"
-          >
-            Discard
-          </button>
+          <div class="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              (click)="store.resumeRecovery()"
+              class="rounded bg-mc-accent px-2.5 py-1 text-xs font-medium text-white hover:opacity-90"
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              (click)="store.discardRecovery()"
+              class="rounded border border-mc-border px-2.5 py-1 text-xs text-mc-text-muted hover:border-mc-danger hover:text-mc-danger"
+            >
+              Discard
+            </button>
+          </div>
         </div>
       }
 
@@ -104,6 +113,12 @@ import {
                     @if (ch.usedMasterBible) {
                       <span class="rounded bg-mc-bg px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-mc-text-faint" title="Used master bible from chapter 1">MB</span>
                     }
+                    @if (ch.recovered) {
+                      <span class="rounded bg-mc-bg px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-mc-text-faint" title="Recovered from an interrupted run">REC</span>
+                    }
+                    @if (ch.awaitingFile) {
+                      <span class="text-xs italic text-mc-text-muted">awaiting PDF — re-add to continue</span>
+                    }
                     @if (ch.currentStage && ch.status === 'running') {
                       <span class="text-xs text-mc-text-muted">{{ stageLabel(ch) }}</span>
                     }
@@ -118,6 +133,17 @@ import {
                       >
                         <ng-icon name="lucideDownload" size="0.8rem" />
                         ZIP
+                      </a>
+                    }
+                    @if (ch.recoveredScriptRef) {
+                      <a
+                        class="flex items-center gap-1 rounded border border-mc-border px-2 py-1 text-xs text-mc-text hover:bg-mc-bg-hover"
+                        [attr.href]="zipUrl(ch.recoveredScriptRef)"
+                        [attr.download]="scriptName(ch.name)"
+                        title="Recovered script (no images — re-add the PDF for a full ZIP)"
+                      >
+                        <ng-icon name="lucideDownload" size="0.8rem" />
+                        script.txt
                       </a>
                     }
                     @if (ch.status === 'pending' || ch.status === 'failed' || ch.status === 'cancelled' || ch.status === 'done') {
@@ -166,6 +192,7 @@ export class BulkModePage {
     const failed = chapters.filter((c) => c.status === 'failed').length;
     const cancelled = chapters.filter((c) => c.status === 'cancelled').length;
     const running = chapters.filter((c) => c.status === 'running').length;
+    const awaiting = chapters.filter((c) => c.awaitingFile).length;
     const status = this.store.status();
     const parts = [
       `${chapters.length} chapter${chapters.length === 1 ? '' : 's'}`,
@@ -173,6 +200,7 @@ export class BulkModePage {
       failed > 0 ? `${failed} failed` : null,
       cancelled > 0 ? `${cancelled} cancelled` : null,
       running > 0 ? '1 running' : null,
+      awaiting > 0 ? `${awaiting} awaiting PDF` : null,
     ].filter((p): p is string => p !== null);
     const prefix = status === 'running' ? 'Running — ' : status === 'idle' ? '' : `${status} — `;
     return `${prefix}${parts.join(' · ')}`;
@@ -184,6 +212,10 @@ export class BulkModePage {
 
   zipUrl(ref: string): string | null {
     return this.blobs.url(ref);
+  }
+
+  scriptName(chapterName: string): string {
+    return `${chapterName.replace(/\.pdf$/i, '')}.script.txt`;
   }
 
   stageLabel(ch: BulkChapter): string {

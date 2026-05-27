@@ -176,6 +176,7 @@ export interface CheckpointPort {
   saveMeta(meta: CheckpointSessionMeta): Promise<void>;
   loadMeta(sessionId: string): Promise<CheckpointSessionMeta | null>;
   writeChapter(sessionId: string, index: number, script: CheckpointChapterScript): Promise<void>;
+  readChapter(sessionId: string, index: number): Promise<CheckpointChapterScript | null>;
   listSessions(): Promise<readonly string[]>;
   deleteSession(sessionId: string): Promise<void>;
 }
