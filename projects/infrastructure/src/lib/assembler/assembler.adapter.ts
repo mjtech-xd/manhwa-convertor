@@ -7,7 +7,6 @@
 //   - manifest.json   : title + bible + counts
 
 import { Injectable, inject } from '@angular/core';
-import JSZip from 'jszip';
 import {
   BLOB_REGISTRY_PORT,
   type AssemblerPort,
@@ -28,6 +27,9 @@ export class AssemblerAdapter implements AssemblerPort {
     chapter: Chapter,
     keptPages: readonly FilteredPage[],
   ): Promise<{ zipRef: string; suggestedName: string }> {
+    // Lazy-loaded: jszip (~90 kB, CJS) is only needed at the final assemble
+    // stage, so it lives in a lazy chunk rather than the initial bundle.
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
     zip.file('script.txt', chapter.script);
