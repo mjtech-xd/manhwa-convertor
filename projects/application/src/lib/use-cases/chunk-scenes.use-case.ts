@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { SceneId, type FilteredPage } from 'domain';
+import { SceneId, type FilteredPage } from '@mc/domain';
 
 export interface ChunkScenesInput {
   readonly pages: readonly FilteredPage[];

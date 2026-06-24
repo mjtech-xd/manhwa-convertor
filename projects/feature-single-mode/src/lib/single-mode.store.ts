@@ -13,7 +13,7 @@ import {
   type CharacterBible,
   type ExtractedPage,
   type FilteredPage,
-} from 'domain';
+} from '@mc/domain';
 import { RunChapterUseCase, type RunChapterStageEvent } from 'application';
 
 export type StageStatus = 'idle' | 'running' | 'done' | 'failed';

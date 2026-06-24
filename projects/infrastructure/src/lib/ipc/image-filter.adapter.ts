@@ -7,7 +7,7 @@ import {
   type FilterSettings,
   type FilteredPage,
   type ImageFilterPort,
-} from 'domain';
+} from '@mc/domain';
 import type { FilteredOutPage, ImageFilterResponse } from 'shared-ipc';
 import { requireBridge } from './bridge';
 

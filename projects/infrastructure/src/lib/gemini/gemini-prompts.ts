@@ -15,7 +15,7 @@
 //     rather than rewriting, since the new port returns string[] issues
 //     and we don't yet pass panel bytes to the accuracy stage).
 
-import type { CharacterBible } from 'domain';
+import type { CharacterBible } from '@mc/domain';
 
 export const BIBLE_PROMPT = `
 You are an expert at reading webtoon/manhwa chapters. I'm giving you the

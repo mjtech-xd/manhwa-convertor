@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { GEMINI_PORT, type ModelTier, type Scene } from 'domain';
+import { GEMINI_PORT, type ModelTier, type Scene } from '@mc/domain';
 
 export interface CheckAccuracyInput {
   readonly script: string;

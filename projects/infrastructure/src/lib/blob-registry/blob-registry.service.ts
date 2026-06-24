@@ -6,7 +6,7 @@
 // the browser will not garbage-collect blob URLs on its own.
 
 import { Injectable } from '@angular/core';
-import type { BlobRegistryPort } from 'domain';
+import type { BlobRegistryPort } from '@mc/domain';
 
 @Injectable({ providedIn: 'root' })
 export class BlobRegistryService implements BlobRegistryPort {

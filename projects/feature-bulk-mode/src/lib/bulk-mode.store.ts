@@ -13,7 +13,7 @@ import {
   type CharacterBible,
   type CheckpointPort,
   type CheckpointSessionMeta,
-} from 'domain';
+} from '@mc/domain';
 import { RunChapterUseCase, type RunChapterStageEvent } from 'application';
 
 export type ChapterStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled';
@@ -320,11 +320,14 @@ export const BulkModeStore = signalStore(
           patchChapterAt(i, { status: 'running', error: null });
           await saveMeta('running');
 
-          const bibleOverride = store.masterBible() ?? undefined;
+          // Omit bibleOverride entirely when there's no master bible —
+          // exactOptionalPropertyTypes forbids passing `undefined` to an
+          // optional property.
+          const masterBible = store.masterBible();
           const result = await runChapter.execute({
             file: ch.file,
             tier: 'flash',
-            bibleOverride,
+            ...(masterBible ? { bibleOverride: masterBible } : {}),
             isCancelled: () => store.cancelRequested(),
             onStage: eventHandlerFor(i),
           });

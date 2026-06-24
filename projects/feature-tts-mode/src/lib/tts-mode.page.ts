@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgIcon } from '@ng-icons/core';
-import { BLOB_REGISTRY_PORT, type BlobRegistryPort } from 'domain';
+import { BLOB_REGISTRY_PORT, type BlobRegistryPort } from '@mc/domain';
 import { TtsModeStore, type LineStatus } from './tts-mode.store';
 
 @Component({

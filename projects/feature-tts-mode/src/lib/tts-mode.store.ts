@@ -5,7 +5,7 @@
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
-import { BLOB_REGISTRY_PORT, TTS_PORT, ChapterId, type BlobRegistryPort, type TtsPort } from 'domain';
+import { BLOB_REGISTRY_PORT, TTS_PORT, ChapterId, type BlobRegistryPort, type TtsPort } from '@mc/domain';
 import { TtsRenderTrackUseCase } from 'application';
 
 export type LineStatus = 'pending' | 'running' | 'done' | 'failed';

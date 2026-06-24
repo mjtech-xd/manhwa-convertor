@@ -16,7 +16,7 @@ import {
   type ApiKeyUsage,
   type KeyLimits,
   DEFAULT_KEY_LIMITS,
-} from 'domain';
+} from '@mc/domain';
 
 const STORAGE_KEY_KEYS = 'mc.apiKeys.v1';
 const STORAGE_KEY_USAGE = 'mc.apiKeyUsage.v1';

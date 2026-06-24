@@ -33,7 +33,7 @@ import {
   type FilteredPage,
   type ModelTier,
   type Scene,
-} from 'domain';
+} from '@mc/domain';
 import { AssembleOutputUseCase } from './assemble-output.use-case';
 import { BuildBibleUseCase } from './build-bible.use-case';
 import { CheckAccuracyUseCase } from './check-accuracy.use-case';

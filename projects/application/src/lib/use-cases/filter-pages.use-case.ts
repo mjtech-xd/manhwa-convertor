@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { IMAGE_FILTER_PORT, type ExtractedPage, type FilteredPage, type FilterSettings } from 'domain';
+import { IMAGE_FILTER_PORT, type ExtractedPage, type FilteredPage, type FilterSettings } from '@mc/domain';
 
 export interface FilterPagesInput {
   readonly pages: readonly ExtractedPage[];

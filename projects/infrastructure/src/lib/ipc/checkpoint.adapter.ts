@@ -9,7 +9,7 @@ import type {
   CheckpointChapterScript,
   CheckpointPort,
   CheckpointSessionMeta,
-} from 'domain';
+} from '@mc/domain';
 import { getBridge } from './bridge';
 
 @Injectable({ providedIn: 'root' })

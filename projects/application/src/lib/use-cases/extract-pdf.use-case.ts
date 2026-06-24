@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { PDF_RASTERISER_PORT, type ExtractedPage } from 'domain';
+import { PDF_RASTERISER_PORT, type ExtractedPage } from '@mc/domain';
 
 export interface ExtractPdfInput {
   readonly pdfBytesRef: string;

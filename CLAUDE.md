@@ -537,6 +537,22 @@ npx ng build domain               # build one specific lib
 
 ## 20a. Architecture Decision Records (ADRs)
 
+### ADR-004 — `domain` library renamed to `@mc/domain`; `npm run typecheck` is a no-op
+
+**Status:** accepted, 2026-06-25.
+
+**Context:** `build:all` (and therefore `electron-builder` packaging) failed at `ng build infrastructure` with 61 `TS2305: Module 'domain' has no exported member …` errors. Root cause: the library was named `domain`, which collides with Node's built-in `domain` module that `@types/node` declares ambiently (`declare module "domain"`). When a lib's import graph pulls in `@types/node` (infrastructure does, via a transitive `/// <reference types="node" />`), `from 'domain'` binds to Node's module — which has none of our exports. `application` built only because its graph never pulled node types. The renderer app build never hit it because the browser app has no node types.
+
+This stayed hidden because **`npm run typecheck` is a no-op**: the root `tsconfig.json` has `files: []` + references but no `include`, and without `-b` tsc compiles nothing — always green. Phase-level type errors (e.g. a real `exactOptionalPropertyTypes` violation in `bulk-mode.store.ts`, and a too-narrow `TtsRenderTrackInput`) accumulated unnoticed.
+
+**Decision:**
+- The domain library's import specifier is **`@mc/domain`** (package name in `projects/domain/package.json`; `tsconfig.json` path maps it to `./dist/domain`). The angular.json project name stays `domain` (so `ng build domain` is unchanged). Never name a workspace lib after a Node builtin.
+- **The real type-check is `npm run build:all`** (ng-packagr checks every lib; the renderer build checks the app) plus `npm run electron:build` for the Node side. Treat `npm run typecheck` as unreliable until it's reworked to `tsc -b`.
+
+**Consequences:** All cross-lib imports use `@mc/domain`. Packaging works: `electron-builder --win --dir` produces `release/win-unpacked` with native modules (sharp, @img, @napi-rs/canvas, ffmpeg-static) `asarUnpack`'d and the full `dist-electron` (ESM main + worker + CJS preload) inside the asar. The full NSIS *installer* additionally needs electron-builder's winCodeSign cache, whose macOS `.dylib` symlinks fail to extract on Windows without Developer Mode/admin — an environment limitation, not a project bug.
+
+
+
 ### ADR-002 — Tailwind v3 and `@ng-icons/lucide` are in
 
 **Status:** accepted, 2026-05-26.

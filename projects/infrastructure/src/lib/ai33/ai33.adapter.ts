@@ -21,7 +21,7 @@ import {
   type TtsPort,
   type TtsRenderRequest,
   type VoiceTrack,
-} from 'domain';
+} from '@mc/domain';
 import type { AudioStitchResponse } from 'shared-ipc';
 import { requireBridge } from '../ipc/bridge';
 import { KeyRotatorService } from '../key-rotator/key-rotator.service';

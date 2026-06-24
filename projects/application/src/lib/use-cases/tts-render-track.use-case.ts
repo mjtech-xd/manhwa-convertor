@@ -1,10 +1,16 @@
 import { Injectable, inject } from '@angular/core';
-import { TTS_PORT, type ChapterId, type VoiceTrack } from 'domain';
+import { TTS_PORT, type ChapterId, type TtsLineEvent, type VoiceTrack } from '@mc/domain';
 
 export interface TtsRenderTrackInput {
   readonly chapterId: ChapterId;
   readonly script: string;
   readonly voiceId: string;
+  /** Milliseconds of silence inserted between lines. */
+  readonly silenceMs?: number;
+  /** Fired after each line completes (success or fail). */
+  readonly onLine?: (event: TtsLineEvent) => void;
+  /** Checked between lines; returning true aborts cleanly. */
+  readonly isCancelled?: () => boolean;
 }
 
 export interface TtsRenderTrackOutput {

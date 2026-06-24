@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { GEMINI_PORT, type CharacterBible, type ModelTier } from 'domain';
+import { GEMINI_PORT, type CharacterBible, type ModelTier } from '@mc/domain';
 
 export interface PolishScriptInput {
   readonly script: string;

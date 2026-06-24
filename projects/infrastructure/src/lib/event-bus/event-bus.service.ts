@@ -4,7 +4,7 @@
 
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
-import type { EventBusPort, StageEvent } from 'domain';
+import type { EventBusPort, StageEvent } from '@mc/domain';
 
 @Injectable({ providedIn: 'root' })
 export class EventBusService implements EventBusPort {

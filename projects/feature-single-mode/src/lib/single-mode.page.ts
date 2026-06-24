@@ -7,7 +7,7 @@ import {
   type ImageGridItem,
   type ProgressStage,
 } from 'ui-kit';
-import { BLOB_REGISTRY_PORT, type BlobRegistryPort, type FilteredPage } from 'domain';
+import { BLOB_REGISTRY_PORT, type BlobRegistryPort, type FilteredPage } from '@mc/domain';
 import { SingleModeStore, type SceneRow, type StageStatus } from './single-mode.store';
 
 function stageStatus(s: StageStatus): ProgressStage['status'] {

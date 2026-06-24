@@ -17,7 +17,7 @@ import {
   type NarrateRequest,
   type NarrateResult,
   type Scene,
-} from 'domain';
+} from '@mc/domain';
 import { KeyRotatorService } from '../key-rotator/key-rotator.service';
 import {
   BIBLE_PROMPT,

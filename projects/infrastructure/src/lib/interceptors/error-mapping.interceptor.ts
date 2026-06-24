@@ -10,7 +10,7 @@
 
 import type { HttpErrorResponse, HttpHandlerFn, HttpRequest } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
-import { LLMResponseError, NoApiKeyAvailableError, QuotaExceededError } from 'domain';
+import { LLMResponseError, NoApiKeyAvailableError, QuotaExceededError } from '@mc/domain';
 
 export function errorMappingInterceptor(
   req: HttpRequest<unknown>,

@@ -5,7 +5,7 @@ import {
   type BlobRegistryPort,
   type ExtractedPage,
   type PdfRasteriserPort,
-} from 'domain';
+} from '@mc/domain';
 import type { PdfRasteriseResponse, RasterisedPage } from 'shared-ipc';
 import { requireBridge } from './bridge';
 

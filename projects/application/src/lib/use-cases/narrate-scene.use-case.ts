@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { GEMINI_PORT, OPENROUTER_PORT, LLMResponseError, type CharacterBible, type ModelTier } from 'domain';
+import { GEMINI_PORT, OPENROUTER_PORT, LLMResponseError, type CharacterBible, type ModelTier } from '@mc/domain';
 
 export interface NarrateSceneInput {
   readonly bible: CharacterBible;

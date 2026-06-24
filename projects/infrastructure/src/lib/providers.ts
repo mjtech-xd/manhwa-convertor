@@ -12,7 +12,7 @@ import {
   IMAGE_FILTER_PORT,
   PDF_RASTERISER_PORT,
   TTS_PORT,
-} from 'domain';
+} from '@mc/domain';
 import { Ai33Adapter } from './ai33/ai33.adapter';
 import { AssemblerAdapter } from './assembler/assembler.adapter';
 import { BlobRegistryService } from './blob-registry/blob-registry.service';

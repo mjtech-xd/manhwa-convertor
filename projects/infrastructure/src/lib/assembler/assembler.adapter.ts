@@ -14,7 +14,7 @@ import {
   type BlobRegistryPort,
   type Chapter,
   type FilteredPage,
-} from 'domain';
+} from '@mc/domain';
 
 const SECONDS_PER_WORD = 1 / 2.5;  // 150 wpm TTS estimate
 const MIN_SECONDS_PER_LINE = 2;

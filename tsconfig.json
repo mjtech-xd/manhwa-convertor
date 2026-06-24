@@ -5,7 +5,7 @@
   "compilerOptions": {
     "paths": {
       "application": ["./dist/application"],
-      "domain": ["./dist/domain"],
+      "@mc/domain": ["./dist/domain"],
       "feature-bulk-mode": ["./dist/feature-bulk-mode"],
       "feature-debug": ["./dist/feature-debug"],
       "feature-settings": ["./dist/feature-settings"],

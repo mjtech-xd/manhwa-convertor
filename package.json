@@ -84,6 +84,13 @@
       "dist/renderer/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "**/node_modules/sharp/**",
+      "**/node_modules/@img/**",
+      "**/node_modules/@napi-rs/canvas/**",
+      "**/node_modules/@napi-rs/canvas-*/**",
+      "**/node_modules/ffmpeg-static/**"
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [

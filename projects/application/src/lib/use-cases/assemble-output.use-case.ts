@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { ASSEMBLER_PORT, type Chapter, type FilteredPage } from 'domain';
+import { ASSEMBLER_PORT, type Chapter, type FilteredPage } from '@mc/domain';
 
 export interface AssembleOutputInput {
   readonly chapter: Chapter;

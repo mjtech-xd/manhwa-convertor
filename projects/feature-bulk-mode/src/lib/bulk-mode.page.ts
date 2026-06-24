@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { FileDropComponent } from 'ui-kit';
-import { BLOB_REGISTRY_PORT, type BlobRegistryPort } from 'domain';
-import type { CheckpointSessionMeta } from 'domain';
+import { BLOB_REGISTRY_PORT, type BlobRegistryPort } from '@mc/domain';
+import type { CheckpointSessionMeta } from '@mc/domain';
 import {
   BulkModeStore,
   type BulkChapter,
