@@ -1,9 +1,27 @@
 # CLAUDE.md — manhwa-convertor
 
 > **Audience:** any agent (Claude or human) picking up this repository cold.
-> **Status:** Phase 6 in progress. Phases 3–5 complete. Worker pool (ADR-001) landed: rasterise + filter run in `node:worker_threads` with an inline fallback. **Critical fix:** the Electron main process never actually booted before — output was ESM but `dist-electron/package.json` said `commonjs`, so Electron threw `SyntaxError` at load (all prior phases were exercised browser-only via `ng serve`). Now ESM main/workers + CJS preload; `npx electron dist-electron/main/index.js` boots and reaches renderer load. See ADR-003.
+> **Status:** Phase 6 in progress. Phases 3–5 complete.
 > **Sibling project:** [`../manhwa-pipeline/`](../manhwa-pipeline/) — the legacy React app that this rewrite replaces. It still ships and gets bug-fixes until v1.0.
 > **Last full review:** 2026-06-25.
+
+### Current state at a glance (2026-06-25)
+
+**Done**
+- Phases 0–2: scaffolding, domain/application stubs, Electron skeleton.
+- **Phase 3** — single-mode pipeline: extract → filter → bible → narrate → polish → structural → accuracy → assemble (ZIP + progress rail).
+- **Phase 4** — bulk mode: master-bible threading, disk checkpoints, resume after a hard kill.
+- **Phase 5** — TTS mode: `Ai33Adapter` + `audio:stitch` IPC (ffmpeg) + `TtsModeStore` + full page UI + AI33 keys in settings.
+- **Phase 6 (partial)** — worker pool for rasterise+filter in `node:worker_threads` w/ inline fallback (ADR-001); ESM-main/CJS-preload fix so the desktop app actually boots (ADR-003); `build:all` lib chain + `electron-builder --dir` packaging fixed — `domain`→`@mc/domain`, hidden type errors, `asarUnpack` (ADR-004).
+
+**Verified:** `npm run build:all` ✓, `npm run electron:build` ✓, `electron-builder --win --dir` ✓ (runnable `release/win-unpacked`), `npx electron dist-electron/main/index.js` boots to renderer load.
+
+**Left**
+- *Phase 6 polish:* initial bundle 3 kB over the 500 kB budget; `jszip` is CJS; rework `npm run typecheck` (currently a **no-op** — use `build:all` for real checks); `MessageChannelMain` IPC streaming; virtual scroll >500 rows; prompt/image caching; p95 chapter <60 s.
+- *Phase 5 follow-up:* golden-file test vs. legacy WAV (deferred — non-deterministic TTS, needs live API).
+- *Phase 7:* auto-updater + signing. NSIS installer is blocked locally by a Windows winCodeSign symlink-privilege issue (needs Developer Mode/admin or CI).
+- *Phase 8:* cutover (archive legacy to a `legacy/` branch).
+- *Known gaps:* near-zero automated test coverage vs. the §15 strategy; key rotator still localStorage (not `safeStorage`/main-process canonical).
 
 ---
 
@@ -118,9 +136,8 @@ A feature library may **not** import another feature library. Cross-feature reus
 | 3 | Single mode parity             | ✅ DONE      | Full 8-stage pipeline complete (extract → filter → bible → narrate → polish → structural → accuracy → assemble). ZIP download + progress rail working. |
 | 4 | Bulk mode parity               | ✅ DONE      | Master-bible threading + checkpoint resume; survives hard kill mid-chapter.                    |
 | 5 | TTS mode parity                | ✅ DONE      | `Ai33Adapter` + `audio:stitch` IPC (ffmpeg) + `TtsModeStore` + full page UI implemented. Golden-file test vs. legacy WAV output deferred (non-deterministic TTS — needs live API). |
-| 6 | Performance + polish           | 🚧 IN PROG  | Slice 1 done: worker pool (ADR-001) for rasterise + filter; ESM/CJS module fix so the desktop app actually boots (ADR-003). Remaining: bundle budget, IPC streaming via MessageChannelMain, virtual scroll >500 rows, caching. |
-| 6 | Performance + polish           |             | Bundle <500 kB initial, p95 chapter <60 s, no renderer FPS drops.                              |
-| 7 | Auto-updater + signing         |             | Notarised macOS DMG, signed Windows NSIS, update channel resolves on staging.                  |
+| 6 | Performance + polish           | 🚧 IN PROG  | **Done:** worker pool (ADR-001) for rasterise+filter; ESM/CJS fix so the desktop app boots (ADR-003); `build:all` lib chain + packaging fixed — `domain`→`@mc/domain`, hidden type errors, `asarUnpack` (ADR-004); `electron-builder --dir` produces a runnable app. **Left:** initial bundle 3 kB over the 500 kB budget; `jszip` is CJS; rework the no-op `npm run typecheck` to `tsc -b`; IPC streaming via `MessageChannelMain`; virtual scroll >500 rows; prompt/image caching; hit p95 chapter <60 s. |
+| 7 | Auto-updater + signing         |             | Notarised macOS DMG, signed Windows NSIS, update channel resolves on staging. (Note: NSIS installer currently blocked locally by a Windows winCodeSign symlink-privilege issue — needs Developer Mode/admin or a CI runner.) |
 | 8 | Cutover                        |             | Legacy `manhwa-pipeline` moves to a `legacy/` branch; this becomes the sole product.           |
 
 ---
