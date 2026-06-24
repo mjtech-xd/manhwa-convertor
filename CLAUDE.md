@@ -17,7 +17,7 @@
 **Verified:** `npm run build:all` ✓, `npm run electron:build` ✓, `electron-builder --win --dir` ✓ (runnable `release/win-unpacked`), `npx electron dist-electron/main/index.js` boots to renderer load.
 
 **Left**
-- *Phase 6 polish:* initial bundle 3 kB over the 500 kB budget; `jszip` is CJS; rework `npm run typecheck` (currently a **no-op** — use `build:all` for real checks); `MessageChannelMain` IPC streaming; virtual scroll >500 rows; prompt/image caching; p95 chapter <60 s.
+- *Phase 6 polish:* initial bundle 3 kB over the 500 kB budget; `jszip` is CJS; `MessageChannelMain` IPC streaming; virtual scroll >500 rows; prompt/image caching; p95 chapter <60 s.
 - *Phase 5 follow-up:* golden-file test vs. legacy WAV (deferred — non-deterministic TTS, needs live API).
 - *Phase 7:* auto-updater + signing. NSIS installer is blocked locally by a Windows winCodeSign symlink-privilege issue (needs Developer Mode/admin or CI).
 - *Phase 8:* cutover (archive legacy to a `legacy/` branch).
@@ -136,7 +136,7 @@ A feature library may **not** import another feature library. Cross-feature reus
 | 3 | Single mode parity             | ✅ DONE      | Full 8-stage pipeline complete (extract → filter → bible → narrate → polish → structural → accuracy → assemble). ZIP download + progress rail working. |
 | 4 | Bulk mode parity               | ✅ DONE      | Master-bible threading + checkpoint resume; survives hard kill mid-chapter.                    |
 | 5 | TTS mode parity                | ✅ DONE      | `Ai33Adapter` + `audio:stitch` IPC (ffmpeg) + `TtsModeStore` + full page UI implemented. Golden-file test vs. legacy WAV output deferred (non-deterministic TTS — needs live API). |
-| 6 | Performance + polish           | 🚧 IN PROG  | **Done:** worker pool (ADR-001) for rasterise+filter; ESM/CJS fix so the desktop app boots (ADR-003); `build:all` lib chain + packaging fixed — `domain`→`@mc/domain`, hidden type errors, `asarUnpack` (ADR-004); `electron-builder --dir` produces a runnable app. **Left:** initial bundle 3 kB over the 500 kB budget; `jszip` is CJS; rework the no-op `npm run typecheck` to `tsc -b`; IPC streaming via `MessageChannelMain`; virtual scroll >500 rows; prompt/image caching; hit p95 chapter <60 s. |
+| 6 | Performance + polish           | 🚧 IN PROG  | **Done:** worker pool (ADR-001) for rasterise+filter; ESM/CJS fix so the desktop app boots (ADR-003); `build:all` lib chain + packaging fixed — `domain`→`@mc/domain`, hidden type errors, `asarUnpack` (ADR-004); `electron-builder --dir` produces a runnable app; `npm run typecheck` reworked to a real `tsc -b` (libs + renderer + specs + electron). **Left:** initial bundle 3 kB over the 500 kB budget; `jszip` is CJS; IPC streaming via `MessageChannelMain`; virtual scroll >500 rows; prompt/image caching; hit p95 chapter <60 s. |
 | 7 | Auto-updater + signing         |             | Notarised macOS DMG, signed Windows NSIS, update channel resolves on staging. (Note: NSIS installer currently blocked locally by a Windows winCodeSign symlink-privilege issue — needs Developer Mode/admin or a CI runner.) |
 | 8 | Cutover                        |             | Legacy `manhwa-pipeline` moves to a `legacy/` branch; this becomes the sole product.           |
 
@@ -523,7 +523,7 @@ npm test                          # vitest
 npm run lint                      # eslint + boundaries
 npm run format                    # prettier write
 npm run format:check              # prettier check (CI uses this)
-npm run typecheck                 # tsc --noEmit
+npm run typecheck                 # tsc -b (all libs + renderer + specs) + electron main/preload, --noEmit
 
 npm run electron:build            # tsc → dist-electron/
 npm run electron:dev              # parallel renderer + main with hot reload
@@ -554,17 +554,17 @@ npx ng build domain               # build one specific lib
 
 ## 20a. Architecture Decision Records (ADRs)
 
-### ADR-004 — `domain` library renamed to `@mc/domain`; `npm run typecheck` is a no-op
+### ADR-004 — `domain` library renamed to `@mc/domain`; `npm run typecheck` reworked to `tsc -b`
 
 **Status:** accepted, 2026-06-25.
 
 **Context:** `build:all` (and therefore `electron-builder` packaging) failed at `ng build infrastructure` with 61 `TS2305: Module 'domain' has no exported member …` errors. Root cause: the library was named `domain`, which collides with Node's built-in `domain` module that `@types/node` declares ambiently (`declare module "domain"`). When a lib's import graph pulls in `@types/node` (infrastructure does, via a transitive `/// <reference types="node" />`), `from 'domain'` binds to Node's module — which has none of our exports. `application` built only because its graph never pulled node types. The renderer app build never hit it because the browser app has no node types.
 
-This stayed hidden because **`npm run typecheck` is a no-op**: the root `tsconfig.json` has `files: []` + references but no `include`, and without `-b` tsc compiles nothing — always green. Phase-level type errors (e.g. a real `exactOptionalPropertyTypes` violation in `bulk-mode.store.ts`, and a too-narrow `TtsRenderTrackInput`) accumulated unnoticed.
+These stayed hidden because **`npm run typecheck` used to be a no-op**: the root `tsconfig.json` has `files: []` + references but no `include`, and without `-b` tsc compiles nothing — always green. Phase-level type errors (e.g. a real `exactOptionalPropertyTypes` violation in `bulk-mode.store.ts`, and a too-narrow `TtsRenderTrackInput`) accumulated unnoticed.
 
 **Decision:**
 - The domain library's import specifier is **`@mc/domain`** (package name in `projects/domain/package.json`; `tsconfig.json` path maps it to `./dist/domain`). The angular.json project name stays `domain` (so `ng build domain` is unchanged). Never name a workspace lib after a Node builtin.
-- **The real type-check is `npm run build:all`** (ng-packagr checks every lib; the renderer build checks the app) plus `npm run electron:build` for the Node side. Treat `npm run typecheck` as unreliable until it's reworked to `tsc -b`.
+- **`npm run typecheck` is reworked to build mode:** `tsc -b tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit && tsc -p electron/tsconfig.preload.json --noEmit`. `-b` honours the project references, so it actually compiles every lib + the renderer app + specs (and now the Electron main/preload too). Verified it catches injected errors on both the Angular and Electron sides; `.tsbuildinfo` lands in gitignored `out-tsc`. Caveat: cross-lib types resolve via `paths → dist/*`, so run after `build:libs` for accuracy on cross-lib API changes; `build:all` remains the authoritative check (it also does Angular template type-checking via `ngc`, which plain `tsc -b` does not).
 
 **Consequences:** All cross-lib imports use `@mc/domain`. Packaging works: `electron-builder --win --dir` produces `release/win-unpacked` with native modules (sharp, @img, @napi-rs/canvas, ffmpeg-static) `asarUnpack`'d and the full `dist-electron` (ESM main + worker + CJS preload) inside the asar. The full NSIS *installer* additionally needs electron-builder's winCodeSign cache, whose macOS `.dylib` symlinks fail to extract on Windows without Developer Mode/admin — an environment limitation, not a project bug.
 

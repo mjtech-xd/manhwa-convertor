@@ -21,7 +21,7 @@
     "lint": "eslint \"projects/**/*.{ts,html}\" \"electron/**/*.ts\"",
     "format": "prettier --write \"projects/**/*.{ts,html,scss}\" \"electron/**/*.ts\"",
     "format:check": "prettier --check \"projects/**/*.{ts,html,scss}\" \"electron/**/*.ts\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -b tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit && tsc -p electron/tsconfig.preload.json --noEmit",
     "electron:build": "tsc -p electron/tsconfig.json && tsc -p electron/tsconfig.preload.json && node -e \"const fs=require('fs');fs.writeFileSync('dist-electron/package.json','{\\\"type\\\":\\\"module\\\"}');fs.mkdirSync('dist-electron/preload',{recursive:true});fs.writeFileSync('dist-electron/preload/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\"",
     "electron:dev": "concurrently -k -n NG,ELECTRON -c blue,magenta \"ng serve\" \"wait-on http://localhost:4200 && npm run electron:build && cross-env NODE_ENV=development electron dist-electron/main/index.js\"",
     "dist": "npm run build:all && npm run electron:build && electron-builder",
