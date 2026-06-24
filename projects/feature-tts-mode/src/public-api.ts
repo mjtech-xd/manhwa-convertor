@@ -3,3 +3,4 @@
  */
 
 export * from './lib/tts-mode.page';
+export * from './lib/tts-mode.store';

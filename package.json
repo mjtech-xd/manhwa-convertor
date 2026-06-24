@@ -37,14 +37,15 @@
     "@angular/forms": "^21.2.0",
     "@angular/platform-browser": "^21.2.0",
     "@angular/router": "^21.2.0",
-    "@ngrx/signals": "^21.1.0",
     "@napi-rs/canvas": "^0.1.65",
     "@ng-icons/core": "^32.0.0",
     "@ng-icons/lucide": "^32.0.0",
+    "@ngrx/signals": "^21.1.0",
+    "ffmpeg-static": "^5.3.0",
     "jszip": "^3.10.1",
     "pdfjs-dist": "^5.7.284",
-    "sharp": "^0.33.5",
     "rxjs": "~7.8.0",
+    "sharp": "^0.33.5",
     "tslib": "^2.3.0",
     "zod": "^3.23.8"
   },
@@ -88,7 +89,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -96,7 +100,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

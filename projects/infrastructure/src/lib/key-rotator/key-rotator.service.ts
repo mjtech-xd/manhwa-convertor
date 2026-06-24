@@ -7,7 +7,7 @@
 //     source of truth across windows).
 //   - Use safeStorage / keytar instead of localStorage.
 
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 import {
   ApiKeyId,
   IsoDateTime,
@@ -40,6 +40,7 @@ interface StoredUsage {
 export class KeyRotatorService {
   private readonly keys = signal<readonly ApiKey[]>(this.loadKeys());
   readonly geminiKeys = this.keys.asReadonly();
+  readonly ai33Keys = computed(() => this.keys().filter((k) => k.provider === 'ai33'));
 
   list(): readonly ApiKey[] {
     return this.keys();
@@ -63,6 +64,16 @@ export class KeyRotatorService {
     const next = this.keys().filter((k) => k.id !== id);
     this.keys.set(next);
     this.persistKeys(next);
+  }
+
+  /**
+   * Pick any available AI33 key (round-robin by least usage today).
+   * Throws NoApiKeyAvailableError if none are registered.
+   */
+  pickAi33Key(): ApiKey {
+    const candidates = this.keys().filter((k) => k.provider === 'ai33');
+    if (candidates.length === 0) throw new NoApiKeyAvailableError('No AI33 keys configured.');
+    return candidates[Math.floor(Math.random() * candidates.length)]!;
   }
 
   /**

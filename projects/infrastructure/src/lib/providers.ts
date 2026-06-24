@@ -11,7 +11,9 @@ import {
   GEMINI_PORT,
   IMAGE_FILTER_PORT,
   PDF_RASTERISER_PORT,
+  TTS_PORT,
 } from 'domain';
+import { Ai33Adapter } from './ai33/ai33.adapter';
 import { AssemblerAdapter } from './assembler/assembler.adapter';
 import { BlobRegistryService } from './blob-registry/blob-registry.service';
 import { CheckpointAdapter } from './ipc/checkpoint.adapter';
@@ -31,5 +33,6 @@ export function provideInfrastructure(): EnvironmentProviders {
     { provide: GEMINI_PORT, useExisting: GeminiAdapter },
     { provide: ASSEMBLER_PORT, useExisting: AssemblerAdapter },
     { provide: CHECKPOINT_PORT, useExisting: CheckpointAdapter },
+    { provide: TTS_PORT, useExisting: Ai33Adapter },
   ]);
 }

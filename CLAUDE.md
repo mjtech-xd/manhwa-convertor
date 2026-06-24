@@ -1,9 +1,9 @@
 # CLAUDE.md — manhwa-convertor
 
 > **Audience:** any agent (Claude or human) picking up this repository cold.
-> **Status:** Phase 3 in progress. Foundation slice working end-to-end: PDF → main-process rasterise (pdfjs + @napi-rs/canvas) → main-process filter (sharp + phash) → Gemini bible. Single-mode page renders progress + filtered grid + bible. Remaining Phase 3 work: chunk → narrate → polish → output ZIP for byte-identical golden-file parity vs. legacy.
+> **Status:** Phase 5 in progress. Phases 3 + 4 complete. TTS mode: `Ai33Adapter` + `audio:stitch` IPC (ffmpeg stitching) + `TtsModeStore` + full page UI are implemented. Remaining: golden-file test vs. legacy output.
 > **Sibling project:** [`../manhwa-pipeline/`](../manhwa-pipeline/) — the legacy React app that this rewrite replaces. It still ships and gets bug-fixes until v1.0.
-> **Last full review:** 2026-05-26.
+> **Last full review:** 2026-06-25.
 
 ---
 
@@ -115,9 +115,9 @@ A feature library may **not** import another feature library. Cross-feature reus
 | 0 | Scaffolding + tooling          | ✅ DONE      | `ng build` green for all 11 projects; ESLint + boundaries wired; CI runs lint + test.          |
 | 1 | Domain + Application stubs     | ✅ DONE      | All entities, ports, use-case signatures defined. No adapters yet.                              |
 | 2 | Electron skeleton              | ✅ DONE      | Main process boots with strict CSP + `contextBridge`. IPC handlers for `pdf:rasterise` + `image:filter` wired with zod validation. Workers (worker_threads) deferred to Phase 6 — see ADR-001 below. |
-| 3 | Single mode parity             | 🚧 IN PROG  | Foundation slice complete (PDF → rasterise → filter → Gemini bible all working end-to-end). Remaining: chunk → narrate → polish → structural → accuracy → output ZIP + golden-file harness. |
-| 4 | Bulk mode parity               |             | Master-bible threading + checkpoint resume; survives hard kill mid-chapter.                    |
-| 5 | TTS mode parity                |             | MP3 + SRT generation matches legacy output byte-for-byte.                                      |
+| 3 | Single mode parity             | ✅ DONE      | Full 8-stage pipeline complete (extract → filter → bible → narrate → polish → structural → accuracy → assemble). ZIP download + progress rail working. |
+| 4 | Bulk mode parity               | ✅ DONE      | Master-bible threading + checkpoint resume; survives hard kill mid-chapter.                    |
+| 5 | TTS mode parity                | 🚧 IN PROG  | `Ai33Adapter` + `audio:stitch` IPC (ffmpeg) + `TtsModeStore` + full page UI implemented. Remaining: golden-file test vs. legacy WAV output. |
 | 6 | Performance + polish           |             | Bundle <500 kB initial, p95 chapter <60 s, no renderer FPS drops.                              |
 | 7 | Auto-updater + signing         |             | Notarised macOS DMG, signed Windows NSIS, update channel resolves on staging.                  |
 | 8 | Cutover                        |             | Legacy `manhwa-pipeline` moves to a `legacy/` branch; this becomes the sole product.           |

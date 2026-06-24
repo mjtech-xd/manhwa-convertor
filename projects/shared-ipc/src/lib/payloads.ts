@@ -76,19 +76,23 @@ export interface ImageFilterResponse {
 }
 
 // ─── Audio stitch ──────────────────────────────────────────────────────
+// Main process fetches the CDN URLs (no renderer CSP restriction), stitches
+// with ffmpeg, and returns raw bytes so the renderer can register them
+// in the BlobRegistry.
 
 export const AudioStitchRequestSchema = z.object({
-  segmentBytesRefs: z.array(BytesRefSchema).min(1),
+  /** CDN URLs returned by ai33.pro task poll (main process fetches these). */
+  segmentUrls: z.array(z.string().url()).min(1),
   sentenceTexts: z.array(z.string()),
+  silenceMs: z.number().int().min(0).max(5000).default(400),
 });
 export type AudioStitchRequest = z.infer<typeof AudioStitchRequestSchema>;
 
-export const AudioStitchResponseSchema = z.object({
-  mp3BytesRef: BytesRefSchema,
-  durationSec: z.number().positive(),
-  srt: z.string(),
-});
-export type AudioStitchResponse = z.infer<typeof AudioStitchResponseSchema>;
+export interface AudioStitchResponse {
+  readonly mp3Bytes: Uint8Array;
+  readonly durationSec: number;
+  readonly srt: string;
+}
 
 // ─── Checkpoint disk ───────────────────────────────────────────────────
 

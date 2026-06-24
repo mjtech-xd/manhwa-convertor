@@ -50,10 +50,23 @@ export const OPENROUTER_PORT = new InjectionToken<OpenRouterPort>('OpenRouterPor
 
 // ─── TTS port ───────────────────────────────────────────────────────────
 
+export interface TtsLineEvent {
+  readonly index: number;
+  readonly total: number;
+  readonly status: 'done' | 'failed';
+  readonly error?: string;
+}
+
 export interface TtsRenderRequest {
   readonly chapterId: ChapterId;
   readonly script: string;
   readonly voiceId: string;
+  /** Milliseconds of silence inserted between lines. Default 400. */
+  readonly silenceMs?: number;
+  /** Fired after each line completes (success or fail). */
+  readonly onLine?: (event: TtsLineEvent) => void;
+  /** Checked between lines; returning true aborts cleanly. */
+  readonly isCancelled?: () => boolean;
 }
 
 export interface TtsPort {
