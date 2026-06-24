@@ -1,7 +1,7 @@
 # CLAUDE.md — manhwa-convertor
 
 > **Audience:** any agent (Claude or human) picking up this repository cold.
-> **Status:** Phase 5 in progress. Phases 3 + 4 complete. TTS mode: `Ai33Adapter` + `audio:stitch` IPC (ffmpeg stitching) + `TtsModeStore` + full page UI are implemented. Remaining: golden-file test vs. legacy output.
+> **Status:** Phase 6 in progress. Phases 3–5 complete. Worker pool (ADR-001) landed: rasterise + filter run in `node:worker_threads` with an inline fallback. **Critical fix:** the Electron main process never actually booted before — output was ESM but `dist-electron/package.json` said `commonjs`, so Electron threw `SyntaxError` at load (all prior phases were exercised browser-only via `ng serve`). Now ESM main/workers + CJS preload; `npx electron dist-electron/main/index.js` boots and reaches renderer load. See ADR-003.
 > **Sibling project:** [`../manhwa-pipeline/`](../manhwa-pipeline/) — the legacy React app that this rewrite replaces. It still ships and gets bug-fixes until v1.0.
 > **Last full review:** 2026-06-25.
 
@@ -117,7 +117,8 @@ A feature library may **not** import another feature library. Cross-feature reus
 | 2 | Electron skeleton              | ✅ DONE      | Main process boots with strict CSP + `contextBridge`. IPC handlers for `pdf:rasterise` + `image:filter` wired with zod validation. Workers (worker_threads) deferred to Phase 6 — see ADR-001 below. |
 | 3 | Single mode parity             | ✅ DONE      | Full 8-stage pipeline complete (extract → filter → bible → narrate → polish → structural → accuracy → assemble). ZIP download + progress rail working. |
 | 4 | Bulk mode parity               | ✅ DONE      | Master-bible threading + checkpoint resume; survives hard kill mid-chapter.                    |
-| 5 | TTS mode parity                | 🚧 IN PROG  | `Ai33Adapter` + `audio:stitch` IPC (ffmpeg) + `TtsModeStore` + full page UI implemented. Remaining: golden-file test vs. legacy WAV output. |
+| 5 | TTS mode parity                | ✅ DONE      | `Ai33Adapter` + `audio:stitch` IPC (ffmpeg) + `TtsModeStore` + full page UI implemented. Golden-file test vs. legacy WAV output deferred (non-deterministic TTS — needs live API). |
+| 6 | Performance + polish           | 🚧 IN PROG  | Slice 1 done: worker pool (ADR-001) for rasterise + filter; ESM/CJS module fix so the desktop app actually boots (ADR-003). Remaining: bundle budget, IPC streaming via MessageChannelMain, virtual scroll >500 rows, caching. |
 | 6 | Performance + polish           |             | Bundle <500 kB initial, p95 chapter <60 s, no renderer FPS drops.                              |
 | 7 | Auto-updater + signing         |             | Notarised macOS DMG, signed Windows NSIS, update channel resolves on staging.                  |
 | 8 | Cutover                        |             | Legacy `manhwa-pipeline` moves to a `legacy/` branch; this becomes the sole product.           |
@@ -555,9 +556,29 @@ npx ng build domain               # build one specific lib
 - Initial bundle grew (Tailwind base + a small icon-runtime). Stayed under the 500 kB budget.
 - Two style mechanisms now coexist (utility classes + per-component SCSS). Convention: utilities for layout/spacing/colour, component styles for animations and component-specific structure. Don't write SCSS for things tailwind already does.
 
-### ADR-001 — Phase-3 rasterisation runs in main process, not worker_threads
+### ADR-003 — ESM main + workers, CommonJS preload
 
-**Status:** accepted, 2026-05-26.
+**Status:** accepted, 2026-06-25.
+
+**Context:** The Electron main process never booted. `electron/tsconfig.json` uses `module: node16`, and the source tree inherits the root `package.json`'s `type: module`, so tsc emitted ESM (`import …`). But the build script wrote `dist-electron/package.json` as `{"type":"commonjs"}`. At launch Electron loaded the main as CJS and threw `SyntaxError: Cannot use import statement outside a module` → "App threw an error during load". Every prior phase (3–5) had only ever been run via `ng serve` (browser-only), where `window.mc` is absent and all IPC adapters no-op — so the boot failure went unnoticed.
+
+ESM output is *required*: `pdfToImages` loads pdfjs-dist v5 (ESM-only) via dynamic `import()`, which `module: node16` preserves only when emitting ESM. Downleveling to CJS would `require()` an ESM-only package and fail.
+
+**Decision:**
+- `dist-electron/package.json` → `{"type":"module"}`. Main process, workers, and services are ESM.
+- **Preload is the exception** — sandboxed preloads (`sandbox: true`) only support CommonJS. It compiles via a separate `electron/tsconfig.preload.json` (`module: commonjs`) and gets its own `dist-electron/preload/package.json` → `{"type":"commonjs"}`.
+- ESM-incompatible globals fixed: `__dirname` → `path.dirname(fileURLToPath(import.meta.url))` (index.ts, worker-pool.ts); `require.resolve` → `createRequire(import.meta.url)` (pdf-rasteriser.service.ts).
+- `electron:build` now runs two tsc passes and writes both `package.json` markers.
+
+**Verification:** `npx electron dist-electron/main/index.js` boots past module load and reaches renderer load (`ERR_FILE_NOT_FOUND` only because the prod renderer bundle isn't built — `electron:dev` serves it from `ng serve`).
+
+**Consequences:** Two module systems coexist in `dist-electron/` by design. Any new preload-side code stays CJS; everything else is ESM. Packaging (Phase 7) must `asarUnpack` native modules (sharp, @napi-rs/canvas, ffmpeg-static) and confirm worker_threads load from the asar layout.
+
+### ADR-001 — Phase-3 rasterisation ran in main process; worker pool landed Phase 6
+
+**Status:** accepted 2026-05-26; **superseded by the Phase-6 worker pool, 2026-06-25.**
+
+**Update (2026-06-25):** The deferred worker pool is now implemented. `electron/main/services/worker-pool.ts` runs rasterise + filter in `node:worker_threads` (lazy spawn, ≤min(cpus-1,4) workers, 60 s idle termination, crashed-worker respawn). `electron/workers/cpu.worker.ts` is the worker entry. `runCpuTask()` wraps the pool with an **inline fallback** so correctness never depends on the worker loading. Verified via a Node smoke test: worker spawns, sharp executes in-thread, correct keep/drop result, no fallback. Original Phase-3 reasoning below for history.
 
 **Context:** The locked architecture says heavy CPU work runs in `node:worker_threads` so the renderer thread (and the Electron main message loop) stay responsive. The Phase 3 vertical needs PDF rasterisation + sharp-based filtering, both CPU-bound.
 

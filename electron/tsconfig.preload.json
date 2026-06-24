@@ -1,8 +1,11 @@
 {
+  // Preload runs in a sandboxed renderer context, which only supports
+  // CommonJS — it cannot be ESM like the rest of the main process. Emitted
+  // separately to dist-electron/preload/ with its own type:commonjs marker.
   "compilerOptions": {
     "target": "ES2022",
-    "module": "node16",
-    "moduleResolution": "node16",
+    "module": "commonjs",
+    "moduleResolution": "node",
     "outDir": "../dist-electron",
     "rootDir": ".",
     "strict": true,
@@ -10,15 +13,11 @@
     "exactOptionalPropertyTypes": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": false,
     "sourceMap": true,
-    "types": ["node"],
-    "paths": {
-      "shared-ipc": ["../dist/shared-ipc"]
-    }
+    "types": ["node"]
   },
-  "include": ["main/**/*.ts", "workers/**/*.ts"],
+  "include": ["preload/**/*.ts"],
   "exclude": ["**/*.spec.ts", "node_modules"]
 }

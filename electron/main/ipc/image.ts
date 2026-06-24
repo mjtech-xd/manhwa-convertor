@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { z } from 'zod';
-import { filterPages } from '../services/image-filter.service.js';
+import { filterPages, type OutPage } from '../services/image-filter.service.js';
+import { runCpuTask } from '../services/worker-pool.js';
 
 const SettingsSchema = z.object({
   cropTopPct: z.number().min(0).max(0.4),
@@ -24,7 +25,12 @@ const RequestSchema = z.object({
 export function registerImageHandlers(): void {
   ipcMain.handle('image:filter', async (_event, raw: unknown) => {
     const req = RequestSchema.parse(raw);
-    const filtered = await filterPages(req.pages, req.settings);
+    // Runs in a worker thread; falls back to inline on worker load failure.
+    const { filtered } = await runCpuTask<{ filtered: readonly OutPage[] }>(
+      'filter',
+      { pages: req.pages, settings: req.settings },
+      async () => ({ filtered: await filterPages(req.pages, req.settings) }),
+    );
     return { filtered };
   });
 }

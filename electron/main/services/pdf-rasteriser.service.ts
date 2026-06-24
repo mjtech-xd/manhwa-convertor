@@ -8,7 +8,11 @@
 
 import { createCanvas } from '@napi-rs/canvas';
 import * as path from 'node:path';
+import { createRequire } from 'node:module';
 import type * as Pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+
+// ESM has no require — recreate it for require.resolve of the worker bundle.
+const require = createRequire(import.meta.url);
 
 // pdfjs-dist v5 is ESM-only. Under `module: node16` tsc preserves this
 // dynamic import() natively (instead of downleveling to require()), so

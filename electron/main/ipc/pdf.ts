@@ -10,7 +10,11 @@
 
 import { ipcMain } from 'electron';
 import { z } from 'zod';
-import { rasterisePdf } from '../services/pdf-rasteriser.service.js';
+import {
+  rasterisePdf,
+  type RasterisedPage,
+} from '../services/pdf-rasteriser.service.js';
+import { runCpuTask } from '../services/worker-pool.js';
 
 const RequestSchema = z.object({
   pdfBytes: z.instanceof(Uint8Array),
@@ -20,7 +24,12 @@ const RequestSchema = z.object({
 export function registerPdfHandlers(): void {
   ipcMain.handle('pdf:rasterise', async (_event, raw: unknown) => {
     const req = RequestSchema.parse(raw);
-    const pages = await rasterisePdf(req.pdfBytes, { maxDimPx: req.maxDimPx });
+    // Runs in a worker thread; falls back to inline on worker load failure.
+    const { pages } = await runCpuTask<{ pages: readonly RasterisedPage[] }>(
+      'rasterise',
+      { pdfBytes: req.pdfBytes, maxDimPx: req.maxDimPx },
+      async () => ({ pages: await rasterisePdf(req.pdfBytes, { maxDimPx: req.maxDimPx }) }),
+    );
     return {
       pages: pages.map((p) => ({
         index: p.index,

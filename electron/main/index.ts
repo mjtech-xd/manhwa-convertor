@@ -7,7 +7,12 @@
 
 import { app, BrowserWindow, session, shell } from 'electron';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { registerIpcHandlers } from './ipc/index.js';
+import { shutdownWorkerPool } from './services/worker-pool.js';
+
+// ESM has no __dirname — derive it from the module URL.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = process.env['NODE_ENV'] === 'development';
 const RENDERER_DEV_URL = 'http://localhost:4200';
@@ -119,4 +124,8 @@ void app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  shutdownWorkerPool();
 });
