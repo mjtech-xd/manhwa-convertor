@@ -25,6 +25,11 @@ export interface ImageGridItem {
       </ul>
     }
   `,
+  // `content-visibility: auto` lets the renderer skip layout + paint for
+  // off-screen cells, so a chapter with hundreds of panels stays smooth
+  // without DOM virtualisation (no CDK, no fixed-height cropping). The
+  // intrinsic-size hint keeps the scrollbar stable before a cell renders.
+  // Electron is Chromium, so this is always available.
   styles: [`
     .empty { color: var(--mc-text-muted); }
     .grid {
@@ -44,6 +49,8 @@ export interface ImageGridItem {
       border-radius: 0.4rem;
       overflow: hidden;
       transition: opacity 120ms ease;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 220px;
     }
     .cell.is-dimmed { opacity: 0.35; }
     img { width: 100%; height: auto; display: block; }
