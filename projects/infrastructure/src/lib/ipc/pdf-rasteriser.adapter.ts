@@ -6,7 +6,6 @@ import {
   type ExtractedPage,
   type PdfRasteriserPort,
 } from '@mc/domain';
-import type { PdfRasteriseResponse, RasterisedPage } from 'shared-ipc';
 import { requireBridge } from './bridge';
 
 @Injectable({ providedIn: 'root' })
@@ -19,22 +18,21 @@ export class PdfRasteriserAdapter implements PdfRasteriserPort {
       throw new ExtractError(`PDF bytes not found for ref ${pdfBytesRef}`);
     }
     const bridge = requireBridge();
-    let response: PdfRasteriseResponse;
+    const pages: ExtractedPage[] = [];
     try {
-      response = (await bridge.pdf.rasterise({
-        pdfBytes: new Uint8Array(bytes),
-        maxDimPx: 2048,
-      } as never)) as PdfRasteriseResponse;
+      // Pages stream in one at a time; register each in the BlobRegistry
+      // as it lands rather than waiting for the whole batch.
+      await bridge.pdf.rasterise({ pdfBytes: new Uint8Array(bytes), maxDimPx: 2048 }, (p) => {
+        const ref = this.blobs.put(p.jpegBytes, 'image/jpeg');
+        pages.push({
+          index: p.index,
+          dimensions: { width: p.width, height: p.height },
+          bytesRef: ref,
+        });
+      });
     } catch (err) {
       throw new ExtractError('PDF rasterisation failed', err);
     }
-    return response.pages.map((p: RasterisedPage) => {
-      const ref = this.blobs.put(p.jpegBytes, 'image/jpeg');
-      return {
-        index: p.index,
-        dimensions: { width: p.width, height: p.height },
-        bytesRef: ref,
-      };
-    });
+    return pages;
   }
 }

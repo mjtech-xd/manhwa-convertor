@@ -70,7 +70,9 @@ describe('ImageFilterAdapter caching', () => {
   });
 
   it('calls the bridge and persists the result on a miss', async () => {
-    const filter = vi.fn(async () => ({ filtered: [OUT] }));
+    const filter = vi.fn(async (_req: unknown, onPage: (p: FilteredOutPage) => void) => {
+      onPage(OUT);
+    });
     (window as unknown as WinWithBridge).mc = { image: { filter } };
     const put = vi.fn(async () => undefined);
     const adapter = setup({ get: async () => null, put });

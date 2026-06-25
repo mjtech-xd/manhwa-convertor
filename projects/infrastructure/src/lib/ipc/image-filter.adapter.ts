@@ -8,7 +8,7 @@ import {
   type FilteredPage,
   type ImageFilterPort,
 } from '@mc/domain';
-import type { FilteredOutPage, ImageFilterResponse } from 'shared-ipc';
+import type { FilteredOutPage } from 'shared-ipc';
 import { requireBridge } from './bridge';
 import {
   FilteredImageCacheService,
@@ -67,14 +67,12 @@ export class ImageFilterAdapter implements ImageFilterPort {
     settings: FilterSettings,
   ): Promise<readonly FilteredOutPage[]> {
     const bridge = requireBridge();
+    const collected: FilteredOutPage[] = [];
     try {
-      const response = (await bridge.image.filter({
-        pages,
-        settings,
-      } as never)) as ImageFilterResponse;
-      return response.filtered;
+      await bridge.image.filter({ pages, settings }, (p) => collected.push(p));
     } catch (err) {
       throw new FilterError('Image filter stage failed', err);
     }
+    return collected;
   }
 }

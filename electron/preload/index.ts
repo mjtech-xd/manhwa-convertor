@@ -38,16 +38,51 @@ function subscribe<T>(channel: string, handler: (data: T) => void): () => void {
   return () => ipcRenderer.removeListener(channel, wrapped);
 }
 
+// Streaming request/response over a MessageChannelMain port. Mirrors
+// electron/main/ipc/stream.ts — keep the `kind` strings in sync. We open
+// a MessageChannel, ship one port to main with the request, then collect
+// streamed items via `onItem` until a terminal `done`/`error`.
+function streamInvoke(
+  channel: string,
+  req: unknown,
+  onItem: (item: unknown) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const { port1, port2 } = new MessageChannel();
+    let settled = false;
+    const finish = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      port1.close();
+      fn();
+    };
+    port1.onmessage = (e: MessageEvent) => {
+      const msg = e.data as { kind: string; item?: unknown; message?: string };
+      if (msg.kind === 'item') onItem(msg.item);
+      else if (msg.kind === 'done') finish(() => resolve());
+      else if (msg.kind === 'error')
+        finish(() => reject(new Error(msg.message ?? 'IPC stream error')));
+    };
+    port1.start();
+    // Hand port2 to main, then post the request payload onto port1; the
+    // message queues until main starts its end.
+    ipcRenderer.postMessage(channel, null, [port2]);
+    port1.postMessage(req);
+  });
+}
+
 const bridge = Object.freeze({
   app: Object.freeze({
     getVersion: () => ipcRenderer.invoke(C.AppGetVersion),
     getPlatform: () => ipcRenderer.invoke(C.AppGetPlatform),
   }),
   pdf: Object.freeze({
-    rasterise: (req: unknown) => ipcRenderer.invoke(C.PdfRasterise, req),
+    rasterise: (req: unknown, onPage: (item: unknown) => void) =>
+      streamInvoke(C.PdfRasterise, req, onPage),
   }),
   image: Object.freeze({
-    filter: (req: unknown) => ipcRenderer.invoke(C.ImageFilter, req),
+    filter: (req: unknown, onPage: (item: unknown) => void) =>
+      streamInvoke(C.ImageFilter, req, onPage),
   }),
   audio: Object.freeze({
     stitch: (req: unknown) => ipcRenderer.invoke(C.AudioStitch, req),

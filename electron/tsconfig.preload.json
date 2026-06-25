@@ -4,6 +4,9 @@
   // separately to dist-electron/preload/ with its own type:commonjs marker.
   "compilerOptions": {
     "target": "ES2022",
+    // Preload runs in the renderer process, so DOM globals (MessageChannel,
+    // MessagePort) are available and used by the streaming IPC transport.
+    "lib": ["ES2022", "DOM"],
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "../dist-electron",

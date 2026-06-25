@@ -12,10 +12,10 @@ import type {
   CheckpointWriteChapterRequest,
   DialogPickPdfsResponse,
   DialogSaveZipResponse,
+  FilteredOutPage,
   ImageFilterRequest,
-  ImageFilterResponse,
   PdfRasteriseRequest,
-  PdfRasteriseResponse,
+  RasterisedPage,
   StageEvent,
   UpdaterStatus,
 } from './payloads';
@@ -23,16 +23,21 @@ import type {
 // Re-export RasterisedPage/FilteredOutPage so consumers can import from one place.
 export type { RasterisedPage, FilteredOutPage } from './payloads';
 
+/** Called once per item streamed back from a streaming IPC channel. */
+export type StreamItemHandler<T> = (item: T) => void;
+
 export interface ManhwaConvertorBridge {
   readonly app: {
     getVersion(): Promise<AppGetVersionResponse>;
     getPlatform(): Promise<AppGetPlatformResponse>;
   };
   readonly pdf: {
-    rasterise(req: PdfRasteriseRequest): Promise<PdfRasteriseResponse>;
+    /** Streams rasterised pages via `onPage`; resolves when the stream ends. */
+    rasterise(req: PdfRasteriseRequest, onPage: StreamItemHandler<RasterisedPage>): Promise<void>;
   };
   readonly image: {
-    filter(req: ImageFilterRequest): Promise<ImageFilterResponse>;
+    /** Streams filtered pages via `onPage`; resolves when the stream ends. */
+    filter(req: ImageFilterRequest, onPage: StreamItemHandler<FilteredOutPage>): Promise<void>;
   };
   readonly audio: {
     stitch(req: AudioStitchRequest): Promise<AudioStitchResponse>;

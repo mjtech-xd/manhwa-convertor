@@ -1,20 +1,17 @@
 // IPC handler for `pdf:rasterise`. Validates the request, calls the
-// rasteriser service, ships back a typed response.
+// rasteriser service, streams pages back one at a time.
 //
 // Renderer sends:  { pdfBytes: Uint8Array, maxDimPx: number }
-// Renderer gets:   { pages: Array<{ index, width, height, jpegBytes: Uint8Array }> }
+// Renderer gets:   a stream of { index, width, height, jpegBytes: Uint8Array }
 //
-// Buffers cross the IPC via structured-clone. For a single PDF this is
-// acceptable (~5–30 MB per direction). When we hit Bulk mode we'll
-// switch to MessageChannelMain to avoid the clone copy.
+// Pages stream over a MessageChannelMain port (see ./stream.ts) so the
+// renderer registers and renders them incrementally rather than waiting
+// for the whole batch in one structured-clone response.
 
-import { ipcMain } from 'electron';
 import { z } from 'zod';
-import {
-  rasterisePdf,
-  type RasterisedPage,
-} from '../services/pdf-rasteriser.service.js';
+import { rasterisePdf, type RasterisedPage } from '../services/pdf-rasteriser.service.js';
 import { runCpuTask } from '../services/worker-pool.js';
+import { handleStream } from './stream.js';
 
 const RequestSchema = z.object({
   pdfBytes: z.instanceof(Uint8Array),
@@ -22,7 +19,7 @@ const RequestSchema = z.object({
 });
 
 export function registerPdfHandlers(): void {
-  ipcMain.handle('pdf:rasterise', async (_event, raw: unknown) => {
+  handleStream('pdf:rasterise', async (raw, emit) => {
     const req = RequestSchema.parse(raw);
     // Runs in a worker thread; falls back to inline on worker load failure.
     const { pages } = await runCpuTask<{ pages: readonly RasterisedPage[] }>(
@@ -30,13 +27,8 @@ export function registerPdfHandlers(): void {
       { pdfBytes: req.pdfBytes, maxDimPx: req.maxDimPx },
       async () => ({ pages: await rasterisePdf(req.pdfBytes, { maxDimPx: req.maxDimPx }) }),
     );
-    return {
-      pages: pages.map((p) => ({
-        index: p.index,
-        width: p.width,
-        height: p.height,
-        jpegBytes: p.jpegBytes,
-      })),
-    };
+    for (const p of pages) {
+      emit({ index: p.index, width: p.width, height: p.height, jpegBytes: p.jpegBytes });
+    }
   });
 }
