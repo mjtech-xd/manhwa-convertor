@@ -23,16 +23,19 @@ import {
   BLOB_REGISTRY_PORT,
   ChapterId,
   DEFAULT_FILTER_SETTINGS,
+  EVENT_BUS_PORT,
   IsoDateTime,
   SceneId,
   SessionId,
   type BlobRegistryPort,
   type Chapter,
   type CharacterBible,
+  type EventBusPort,
   type ExtractedPage,
   type FilteredPage,
   type ModelTier,
   type Scene,
+  type StageEvent,
 } from '@mc/domain';
 import { AssembleOutputUseCase } from './assemble-output.use-case';
 import { BuildBibleUseCase } from './build-bible.use-case';
@@ -45,7 +48,14 @@ import { PolishScriptUseCase } from './polish-script.use-case';
 import { StructuralEditUseCase } from './structural-edit.use-case';
 
 export type ChapterStage =
-  | 'extract' | 'filter' | 'bible' | 'narrate' | 'polish' | 'structural' | 'accuracy' | 'assemble';
+  | 'extract'
+  | 'filter'
+  | 'bible'
+  | 'narrate'
+  | 'polish'
+  | 'structural'
+  | 'accuracy'
+  | 'assemble';
 
 export type RunChapterStageEvent =
   | { kind: 'extract.start' }
@@ -57,7 +67,11 @@ export type RunChapterStageEvent =
   | { kind: 'bible.start' }
   | { kind: 'bible.done'; bible: CharacterBible; skipped: boolean }
   | { kind: 'bible.failed'; error: string }
-  | { kind: 'narrate.start'; sceneCount: number; scenes: readonly { id: string; panelIndices: readonly number[] }[] }
+  | {
+      kind: 'narrate.start';
+      sceneCount: number;
+      scenes: readonly { id: string; panelIndices: readonly number[] }[];
+    }
   | { kind: 'narrate.scene-start'; index: number }
   | { kind: 'narrate.scene-done'; index: number; narration: string }
   | { kind: 'narrate.scene-failed'; index: number; error: string }
@@ -115,9 +129,17 @@ export class RunChapterUseCase {
   private readonly accuracyUc = inject(CheckAccuracyUseCase);
   private readonly assembleUc = inject(AssembleOutputUseCase);
   private readonly blobs: BlobRegistryPort = inject(BLOB_REGISTRY_PORT);
+  private readonly bus: EventBusPort = inject(EVENT_BUS_PORT);
 
   async execute(input: RunChapterInput): Promise<RunChapterOutput> {
-    const emit = (e: RunChapterStageEvent): void => input.onStage?.(e);
+    // Correlates each stage's start/end on the telemetry bus across
+    // concurrent runs (bulk mode); distinct from the final chapter id.
+    const runId = ChapterId(`run-${Date.now().toString(36)}-${rand4()}`);
+    const emit = (e: RunChapterStageEvent): void => {
+      input.onStage?.(e);
+      const tele = toStageEvent(e, runId);
+      if (tele) this.bus.emit(tele);
+    };
     const cancelled = (): boolean => input.isCancelled?.() ?? false;
 
     let extractedPagesRefs: readonly string[] = [];
@@ -153,7 +175,10 @@ export class RunChapterUseCase {
     emit({ kind: 'filter.start' });
     let filtered: readonly FilteredPage[];
     try {
-      const r = await this.filterUc.execute({ pages: extracted, settings: DEFAULT_FILTER_SETTINGS });
+      const r = await this.filterUc.execute({
+        pages: extracted,
+        settings: DEFAULT_FILTER_SETTINGS,
+      });
       filtered = r.filtered;
       filteredPagesRefs = filtered.map((p) => p.bytesRef);
       emit({ kind: 'filter.done', pages: filtered });
@@ -208,9 +233,9 @@ export class RunChapterUseCase {
         return cancelResult('narrate', extractedPagesRefs, filteredPagesRefs, bible);
       }
       emit({ kind: 'narrate.scene-start', index: s });
-      const refs = sceneChunks[s]!.panelIndices
-        .map((idx) => refByIndex.get(idx))
-        .filter((r): r is string => !!r);
+      const refs = sceneChunks[s]!.panelIndices.map((idx) => refByIndex.get(idx)).filter(
+        (r): r is string => !!r,
+      );
       try {
         const r = await this.narrateUc.execute({
           bible,
@@ -241,7 +266,9 @@ export class RunChapterUseCase {
       return failResult(
         'narrate',
         `no scenes succeeded (${failedScenes}/${sceneChunks.length} failed)`,
-        extractedPagesRefs, filteredPagesRefs, bible,
+        extractedPagesRefs,
+        filteredPagesRefs,
+        bible,
       );
     }
     if (cancelled()) {
@@ -270,7 +297,11 @@ export class RunChapterUseCase {
     emit({ kind: 'structural.start' });
     let editedScript: string;
     try {
-      const r = await this.structuralUc.execute({ script: polishedScript, bible, tier: input.tier });
+      const r = await this.structuralUc.execute({
+        script: polishedScript,
+        bible,
+        tier: input.tier,
+      });
       editedScript = r.edited;
       emit({ kind: 'structural.done', script: editedScript });
     } catch (err) {
@@ -388,6 +419,37 @@ function stringifyError(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
 }
+
+/**
+ * Translate a rich pipeline event into a telemetry StageEvent for the
+ * EventBus, or null for events that aren't stage boundaries (scene-level
+ * narrate ticks, cancellation). The `.start` / `.done` / `.failed`
+ * suffix maps to `start` / `end` / `error`; the timing collector pairs
+ * start↔end per (stage, runId) to derive p50/p95.
+ */
+function toStageEvent(e: RunChapterStageEvent, runId: ChapterId): StageEvent | null {
+  const dot = e.kind.lastIndexOf('.');
+  if (dot < 0) return null;
+  const stage = e.kind.slice(0, dot);
+  const suffix = e.kind.slice(dot + 1);
+  const phase =
+    suffix === 'start' ? 'start' : suffix === 'done' ? 'end' : suffix === 'failed' ? 'error' : null;
+  if (!phase) return null;
+  // `stage` here is one of the ChapterStage names, all valid StageEvent stages.
+  if (!STAGE_NAMES.has(stage)) return null;
+  return { stage: stage as StageEvent['stage'], phase, chapterId: runId, tsMs: Date.now() };
+}
+
+const STAGE_NAMES: ReadonlySet<string> = new Set([
+  'extract',
+  'filter',
+  'bible',
+  'narrate',
+  'polish',
+  'structural',
+  'accuracy',
+  'assemble',
+]);
 
 function rand4(): string {
   return Math.random().toString(36).slice(2, 6);

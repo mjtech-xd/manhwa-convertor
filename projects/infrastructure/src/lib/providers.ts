@@ -1,7 +1,12 @@
 // Single entry point the renderer's app.config.ts calls to wire every
 // port to its adapter. Keeps the shell free of infrastructure imports.
 
-import { type EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
+import {
+  ENVIRONMENT_INITIALIZER,
+  inject,
+  type EnvironmentProviders,
+  makeEnvironmentProviders,
+} from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import {
   ASSEMBLER_PORT,
@@ -11,6 +16,7 @@ import {
   GEMINI_PORT,
   IMAGE_FILTER_PORT,
   PDF_RASTERISER_PORT,
+  STAGE_TIMING_PORT,
   TTS_PORT,
 } from '@mc/domain';
 import { Ai33Adapter } from './ai33/ai33.adapter';
@@ -22,6 +28,7 @@ import { GeminiAdapter } from './gemini/gemini.adapter';
 import { errorMappingInterceptor } from './interceptors/error-mapping.interceptor';
 import { ImageFilterAdapter } from './ipc/image-filter.adapter';
 import { PdfRasteriserAdapter } from './ipc/pdf-rasteriser.adapter';
+import { StageTimingService } from './logging/stage-timing.service';
 
 export function provideInfrastructure(): EnvironmentProviders {
   return makeEnvironmentProviders([
@@ -34,5 +41,13 @@ export function provideInfrastructure(): EnvironmentProviders {
     { provide: ASSEMBLER_PORT, useExisting: AssemblerAdapter },
     { provide: CHECKPOINT_PORT, useExisting: CheckpointAdapter },
     { provide: TTS_PORT, useExisting: Ai33Adapter },
+    { provide: STAGE_TIMING_PORT, useExisting: StageTimingService },
+    // Eagerly instantiate the timing collector at bootstrap so it captures
+    // every run, not just those started after the Debug panel is opened.
+    {
+      provide: ENVIRONMENT_INITIALIZER,
+      multi: true,
+      useValue: () => inject(StageTimingService),
+    },
   ]);
 }

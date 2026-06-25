@@ -1,7 +1,7 @@
 // Ports — interfaces the application layer depends on. Adapters in
 // `infrastructure` implement these. Tests provide fakes.
 
-import { InjectionToken } from '@angular/core';
+import { InjectionToken, type Signal } from '@angular/core';
 import type {
   ApiKey,
   ApiKeyUsage,
@@ -20,7 +20,7 @@ import type { ChapterId, ModelTier, SessionId } from './value-objects';
 
 export interface NarrateRequest {
   readonly bible: CharacterBible;
-  readonly previousScript: string;          // rolling context
+  readonly previousScript: string; // rolling context
   readonly panelBytesRefs: readonly string[];
   readonly tier: ModelTier;
 }
@@ -37,7 +37,11 @@ export interface GeminiPort {
   buildBible(panelBytesRefs: readonly string[], tier: ModelTier): Promise<CharacterBible>;
   polishScript(script: string, bible: CharacterBible, tier: ModelTier): Promise<string>;
   structuralEdit(script: string, bible: CharacterBible, tier: ModelTier): Promise<string>;
-  checkAccuracy(script: string, scenes: readonly Scene[], tier: ModelTier): Promise<{ issues: readonly string[] }>;
+  checkAccuracy(
+    script: string,
+    scenes: readonly Scene[],
+    tier: ModelTier,
+  ): Promise<{ issues: readonly string[] }>;
 }
 
 export const GEMINI_PORT = new InjectionToken<GeminiPort>('GeminiPort');
@@ -85,7 +89,10 @@ export interface PdfRasteriserPort {
 export const PDF_RASTERISER_PORT = new InjectionToken<PdfRasteriserPort>('PdfRasteriserPort');
 
 export interface ImageFilterPort {
-  filter(pages: readonly ExtractedPage[], settings: FilterSettings): Promise<readonly FilteredPage[]>;
+  filter(
+    pages: readonly ExtractedPage[],
+    settings: FilterSettings,
+  ): Promise<readonly FilteredPage[]>;
 }
 
 export const IMAGE_FILTER_PORT = new InjectionToken<ImageFilterPort>('ImageFilterPort');
@@ -199,17 +206,49 @@ export const CHECKPOINT_PORT = new InjectionToken<CheckpointPort>('CheckpointPor
 // ─── Logging / events ───────────────────────────────────────────────────
 
 export interface StageEvent {
-  readonly stage: 'extract' | 'filter' | 'bible' | 'chunk' | 'narrate' | 'polish' | 'structural' | 'accuracy' | 'assemble' | 'tts';
+  readonly stage:
+    | 'extract'
+    | 'filter'
+    | 'bible'
+    | 'chunk'
+    | 'narrate'
+    | 'polish'
+    | 'structural'
+    | 'accuracy'
+    | 'assemble'
+    | 'tts';
   readonly phase: 'start' | 'progress' | 'end' | 'error';
   readonly chapterId?: ChapterId;
-  readonly progress?: number;       // 0..1
+  readonly progress?: number; // 0..1
   readonly message?: string;
   readonly tsMs: number;
 }
 
 export interface EventBusPort {
   emit(event: StageEvent): void;
-  onStage(handler: (event: StageEvent) => void): () => void;   // returns unsubscribe
+  onStage(handler: (event: StageEvent) => void): () => void; // returns unsubscribe
 }
 
 export const EVENT_BUS_PORT = new InjectionToken<EventBusPort>('EventBusPort');
+
+// ─── Stage timing (p50/p95 telemetry, CLAUDE.md §12) ────────────────────
+
+export interface StageTimingSummary {
+  readonly stage: StageEvent['stage'];
+  readonly count: number;
+  readonly p50Ms: number;
+  readonly p95Ms: number;
+  readonly lastMs: number;
+}
+
+/**
+ * Aggregates per-stage durations from EventBus start/end events and
+ * exposes p50/p95. Read-only to consumers (the Debug panel); the
+ * implementation subscribes to the bus itself.
+ */
+export interface StageTimingPort {
+  readonly summary: Signal<readonly StageTimingSummary[]>;
+  reset(): void;
+}
+
+export const STAGE_TIMING_PORT = new InjectionToken<StageTimingPort>('StageTimingPort');
