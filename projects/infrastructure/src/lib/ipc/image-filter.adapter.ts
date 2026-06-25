@@ -10,10 +10,16 @@ import {
 } from '@mc/domain';
 import type { FilteredOutPage, ImageFilterResponse } from 'shared-ipc';
 import { requireBridge } from './bridge';
+import {
+  FilteredImageCacheService,
+  buildFilterCacheKey,
+  hashBytes,
+} from '../cache/filtered-image-cache';
 
 @Injectable({ providedIn: 'root' })
 export class ImageFilterAdapter implements ImageFilterPort {
   private readonly blobs: BlobRegistryPort = inject(BLOB_REGISTRY_PORT);
+  private readonly cache = inject(FilteredImageCacheService);
 
   async filter(
     pages: readonly ExtractedPage[],
@@ -23,19 +29,27 @@ export class ImageFilterAdapter implements ImageFilterPort {
       pages.map(async (p) => {
         const bytes = await this.blobs.get(p.bytesRef);
         if (!bytes) throw new FilterError(`Bytes missing for page ${p.index}`);
-        return { index: p.index, jpegBytes: new Uint8Array(bytes) };
+        const jpegBytes = new Uint8Array(bytes);
+        return { index: p.index, jpegBytes, hash: hashBytes(jpegBytes) };
       }),
     );
 
-    const bridge = requireBridge();
-    let response: ImageFilterResponse;
-    try {
-      response = (await bridge.image.filter({ pages: resolved, settings } as never)) as ImageFilterResponse;
-    } catch (err) {
-      throw new FilterError('Image filter stage failed', err);
+    const cacheKey = buildFilterCacheKey(
+      resolved.map((r) => r.hash),
+      settings,
+    );
+
+    let filtered = await this.cache.get(cacheKey);
+    if (!filtered) {
+      filtered = await this.runFilter(
+        resolved.map((r) => ({ index: r.index, jpegBytes: r.jpegBytes })),
+        settings,
+      );
+      // Fire-and-forget persist; the result is already returned to the caller.
+      void this.cache.put(cacheKey, filtered);
     }
 
-    return response.filtered.map((p: FilteredOutPage) => {
+    return filtered.map((p) => {
       const ref = this.blobs.put(p.jpegBytes, 'image/jpeg');
       return {
         index: p.index,
@@ -46,5 +60,21 @@ export class ImageFilterAdapter implements ImageFilterPort {
         phash: p.phash,
       };
     });
+  }
+
+  private async runFilter(
+    pages: readonly { index: number; jpegBytes: Uint8Array }[],
+    settings: FilterSettings,
+  ): Promise<readonly FilteredOutPage[]> {
+    const bridge = requireBridge();
+    try {
+      const response = (await bridge.image.filter({
+        pages,
+        settings,
+      } as never)) as ImageFilterResponse;
+      return response.filtered;
+    } catch (err) {
+      throw new FilterError('Image filter stage failed', err);
+    }
   }
 }
