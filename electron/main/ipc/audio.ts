@@ -22,10 +22,12 @@ const execFileAsync = promisify(execFile);
 const AI33_URL_RE = /^https:\/\/[^\s]+/i;
 
 const RequestSchema = z.object({
-  segmentUrls: z.array(z.string().url()).min(1).refine(
-    (urls) => urls.every((u) => AI33_URL_RE.test(u)),
-    { message: 'All segment URLs must be https' },
-  ),
+  segmentUrls: z
+    .array(z.string().url())
+    .min(1)
+    .refine((urls) => urls.every((u) => AI33_URL_RE.test(u)), {
+      message: 'All segment URLs must be https',
+    }),
   sentenceTexts: z.array(z.string()),
   silenceMs: z.number().int().min(0).max(5000).default(400),
 });
@@ -37,7 +39,8 @@ export function registerAudioHandlers(): void {
     try {
       return await stitchSegments(tmpDir, req.segmentUrls, req.sentenceTexts, req.silenceMs);
     } finally {
-      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      // Best-effort temp cleanup; ignore failure (dir may already be gone).
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
     }
   });
 }
@@ -69,13 +72,20 @@ async function stitchSegments(
   if (silenceMs > 0 && segFiles.length > 1) {
     silenceFile = path.join(tmpDir, 'silence.mp3');
     await execFileAsync(ffmpeg, [
-      '-f', 'lavfi',
-      '-i', `anullsrc=r=44100:cl=stereo`,
-      '-t', (silenceMs / 1000).toFixed(4),
-      '-acodec', 'libmp3lame',
-      '-ar', '44100',
-      '-ac', '2',
-      '-b:a', '128k',
+      '-f',
+      'lavfi',
+      '-i',
+      `anullsrc=r=44100:cl=stereo`,
+      '-t',
+      (silenceMs / 1000).toFixed(4),
+      '-acodec',
+      'libmp3lame',
+      '-ar',
+      '44100',
+      '-ac',
+      '2',
+      '-b:a',
+      '128k',
       '-y',
       silenceFile,
     ]);
@@ -96,16 +106,21 @@ async function stitchSegments(
   // Concatenate with the concat demuxer (stream copy; no re-encode).
   const outputFile = path.join(tmpDir, 'output.mp3');
   await execFileAsync(ffmpeg, [
-    '-f', 'concat',
-    '-safe', '0',
-    '-i', concatFile,
-    '-c', 'copy',
+    '-f',
+    'concat',
+    '-safe',
+    '0',
+    '-i',
+    concatFile,
+    '-c',
+    'copy',
     '-y',
     outputFile,
   ]);
 
   const mp3Bytes = new Uint8Array(await fs.readFile(outputFile));
-  const totalMs = durationsMs.reduce((a, b) => a + b, 0) + silenceMs * Math.max(0, segFiles.length - 1);
+  const totalMs =
+    durationsMs.reduce((a, b) => a + b, 0) + silenceMs * Math.max(0, segFiles.length - 1);
 
   return {
     mp3Bytes,
