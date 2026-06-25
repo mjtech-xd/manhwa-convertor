@@ -19,6 +19,7 @@ import {
   type Scene,
 } from '@mc/domain';
 import { KeyRotatorService } from '../key-rotator/key-rotator.service';
+import { LruCache } from '../cache/lru-cache';
 import {
   BIBLE_PROMPT,
   buildAccuracyIssuesPrompt,
@@ -52,10 +53,12 @@ export class GeminiAdapter implements GeminiPort {
   private readonly keys = inject(KeyRotatorService);
   private readonly blobs: BlobRegistryPort = inject(BLOB_REGISTRY_PORT);
 
-  async buildBible(
-    panelBytesRefs: readonly string[],
-    tier: ModelTier,
-  ): Promise<CharacterBible> {
+  // Per-session prompt→response cache (§11). A cache hit short-circuits
+  // the HTTP call *and* the key pick, so resumed/retried runs spend no
+  // quota re-deriving identical bibles, polishes, or narrations.
+  private readonly cache = new LruCache<string>(200);
+
+  async buildBible(panelBytesRefs: readonly string[], tier: ModelTier): Promise<CharacterBible> {
     const parts: GeminiContentPart[] = [{ text: BIBLE_PROMPT }];
     for (const ref of panelBytesRefs.slice(0, 30)) {
       const buf = await this.blobs.get(ref);
@@ -68,11 +71,6 @@ export class GeminiAdapter implements GeminiPort {
       });
     }
 
-    const key = this.keys.pickGeminiKey();
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${MODEL_BY_TIER[tier]}:generateContent?key=${encodeURIComponent(key.secret)}`;
-
     const body: GeminiRequest = {
       contents: [{ role: 'user', parts }],
       generationConfig: {
@@ -81,15 +79,7 @@ export class GeminiAdapter implements GeminiPort {
       },
     };
 
-    let raw: GeminiResponse;
-    try {
-      raw = await firstValueFrom(this.http.post<GeminiResponse>(url, body));
-    } catch (err) {
-      throw new LLMResponseError('Gemini buildBible call failed', err);
-    }
-
-    const text = raw.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new LLMResponseError('Gemini returned empty bible response');
+    const text = await this.generate(MODEL_BY_TIER[tier], body, 'buildBible', 'bible');
 
     let parsed: unknown;
     try {
@@ -120,12 +110,7 @@ export class GeminiAdapter implements GeminiPort {
       });
     }
 
-    const key = this.keys.pickGeminiKey();
     const model = MODEL_BY_TIER[req.tier];
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${model}:generateContent?key=${encodeURIComponent(key.secret)}`;
-
     const body: GeminiRequest = {
       contents: [{ role: 'user', parts }],
       generationConfig: {
@@ -134,16 +119,7 @@ export class GeminiAdapter implements GeminiPort {
       },
     };
 
-    let raw: GeminiResponse;
-    try {
-      raw = await firstValueFrom(this.http.post<GeminiResponse>(url, body));
-    } catch (err) {
-      throw new LLMResponseError('Gemini narrate call failed', err);
-    }
-
-    const text = raw.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new LLMResponseError('Gemini returned empty narrate response');
-
+    const text = await this.generate(model, body, 'narrate', 'narrate');
     return { narration: text, modelUsed: model, tokensIn: 0, tokensOut: 0 };
   }
   async polishScript(script: string, bible: CharacterBible, tier: ModelTier): Promise<string> {
@@ -177,12 +153,6 @@ export class GeminiAdapter implements GeminiPort {
     if (paragraphs.length === 0) return { issues: [] };
     const numbered = paragraphs.map((p, i) => `${i + 1}. ${p}`).join('\n\n');
 
-    const key = this.keys.pickGeminiKey();
-    const model = MODEL_BY_TIER[tier];
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${model}:generateContent?key=${encodeURIComponent(key.secret)}`;
-
     const body: GeminiRequest = {
       contents: [{ role: 'user', parts: [{ text: buildAccuracyIssuesPrompt(numbered) }] }],
       generationConfig: {
@@ -192,15 +162,7 @@ export class GeminiAdapter implements GeminiPort {
       },
     };
 
-    let raw: GeminiResponse;
-    try {
-      raw = await firstValueFrom(this.http.post<GeminiResponse>(url, body));
-    } catch (err) {
-      throw new LLMResponseError('Gemini checkAccuracy call failed', err);
-    }
-
-    const text = raw.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new LLMResponseError('Gemini returned empty accuracy response');
+    const text = await this.generate(MODEL_BY_TIER[tier], body, 'checkAccuracy', 'accuracy');
 
     let parsed: unknown;
     try {
@@ -228,26 +190,17 @@ export class GeminiAdapter implements GeminiPort {
     const numbered = paragraphs.map((p, i) => `${i + 1}. ${p}`).join('\n\n');
     const prompt = opts.buildPrompt(paragraphs.length, numbered);
 
-    const key = this.keys.pickGeminiKey();
-    const model = MODEL_BY_TIER[opts.tier];
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${model}:generateContent?key=${encodeURIComponent(key.secret)}`;
-
     const body: GeminiRequest = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { temperature: opts.temperature, topP: opts.topP },
     };
 
-    let raw: GeminiResponse;
-    try {
-      raw = await firstValueFrom(this.http.post<GeminiResponse>(url, body));
-    } catch (err) {
-      throw new LLMResponseError(`Gemini ${opts.stageName} call failed`, err);
-    }
-
-    const text = raw.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new LLMResponseError(`Gemini returned empty ${opts.stageName} response`);
+    const text = await this.generate(
+      MODEL_BY_TIER[opts.tier],
+      body,
+      opts.stageName,
+      opts.stageName,
+    );
 
     const rewritten = parseNumberedLines(text);
     // SRT-sync invariant: if Gemini drifted on paragraph count, fall
@@ -257,6 +210,73 @@ export class GeminiAdapter implements GeminiPort {
     }
     return rewritten.join('\n\n');
   }
+
+  /**
+   * Single HTTP path for every Gemini call. Checks the per-session
+   * cache first; on a miss it picks a live key, POSTs, extracts the
+   * candidate text, and caches it. `callLabel` shapes the failure
+   * message, `emptyNoun` the empty-response message — both preserve the
+   * original per-stage wording.
+   */
+  private async generate(
+    model: string,
+    body: GeminiRequest,
+    callLabel: string,
+    emptyNoun: string,
+  ): Promise<string> {
+    const cacheKey = cacheKeyFor(model, body);
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const key = this.keys.pickGeminiKey();
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/` +
+      `${model}:generateContent?key=${encodeURIComponent(key.secret)}`;
+
+    let raw: GeminiResponse;
+    try {
+      raw = await firstValueFrom(this.http.post<GeminiResponse>(url, body));
+    } catch (err) {
+      throw new LLMResponseError(`Gemini ${callLabel} call failed`, err);
+    }
+
+    const text = raw.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new LLMResponseError(`Gemini returned empty ${emptyNoun} response`);
+
+    this.cache.set(cacheKey, text);
+    return text;
+  }
+}
+
+/**
+ * Stable cache key for a request. The request body carries the prompt,
+ * generation config, and (for image stages) base64 panel bytes, so a
+ * hash over its JSON uniquely identifies the call. Two independent
+ * hashes plus the byte length make a false hit astronomically unlikely
+ * for a 200-entry session cache, without retaining the megabytes of
+ * base64 the raw key would.
+ */
+function cacheKeyFor(model: string, body: GeminiRequest): string {
+  const json = JSON.stringify(body);
+  return `${model}:${json.length}:${fnv1a(json)}:${sdbm(json)}`;
+}
+
+function fnv1a(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function sdbm(str: string): string {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h, 65599) + str.charCodeAt(i);
+    h |= 0;
+  }
+  return (h >>> 0).toString(36);
 }
 
 const AccuracyIssuesSchema = z.object({
